@@ -156,13 +156,34 @@ Every subsequent `git push` to `main` triggers a new deploy. For preview
 environments per branch/PR, enable **PR Environments** in the service
 settings.
 
+## Module 1: Creator Tracker & Scraper
+
+Live at `/dashboard/creators`. Add a Threads username, open it, click
+**Fetch recent posts** — that calls a RapidAPI Threads scraper and upserts
+the results into `scraped_threads`.
+
+### Set up the scraper
+
+1. On RapidAPI, subscribe to a "Threads scraper" listing (search the
+   marketplace — several exist, pricing/free-tier varies by provider).
+2. Open its **Test Endpoint** panel for the "get user posts" endpoint and
+   copy three things into `.env.local` (and Railway → Variables):
+   - `THREADS_SCRAPER_BASE_URL` — the full endpoint URL.
+   - `THREADS_SCRAPER_HOST` — the `X-RapidAPI-Host` value shown there.
+   - `THREADS_SCRAPER_API_KEY` — your RapidAPI key.
+3. `lib/threads/scraper.ts` normalizes the response with fallback field
+   lookups covering the field names most listings use (`likes`/`like_count`,
+   `text`/`caption`, etc.). **Different listings return different shapes** —
+   if posts come back with missing likes/text/dates after your first fetch,
+   open a row's `raw_data` column in the Supabase table editor to see the
+   real field names and adjust `normalizeThreadsPost()` accordingly. Nothing
+   is lost in the meantime — the full raw payload is always saved to
+   `raw_data` regardless of whether normalization mapped it correctly.
+
 ## What's next
 
-Auth is done — `/login`, `/dashboard`, and route protection all work.
+Auth (Module 0) and Module 1 (creator tracker + scraper) are done.
 
-- **Module 1**: `creators` CRUD UI + a scraper integration (RapidAPI Threads
-  scraper is the pragmatic starting point — the official API has no endpoint
-  for reading *other* accounts' posts, only your own).
 - **Module 2**: `/api/analyze` route calling Claude with a batch of a
   creator's `scraped_threads`, writing structured output to `creator_analysis`.
 - **Module 3**: generation UI + `/api/generate` route using `generated_rules`

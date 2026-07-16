@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { signOut } from "@/app/login/actions";
@@ -18,7 +19,17 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
-        <span className="font-semibold">TTAgent</span>
+        <div className="flex items-center gap-6">
+          <span className="font-semibold">TTAgent</span>
+          <nav className="flex items-center gap-4 text-sm text-slate-600">
+            <Link href="/dashboard" className="hover:text-slate-900">
+              Dashboard
+            </Link>
+            <Link href="/dashboard/creators" className="hover:text-slate-900">
+              Creators
+            </Link>
+          </nav>
+        </div>
         <div className="flex items-center gap-4 text-sm text-slate-600">
           <span>{user.email}</span>
           <form action={signOut}>
