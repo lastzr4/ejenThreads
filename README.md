@@ -87,15 +87,30 @@ supabase link --project-ref <your-project-ref>
 supabase db push
 ```
 
-### 6. Enable email auth
+### 6. Auth is wired up — create your account
 Supabase Auth → Providers → make sure **Email** is enabled (it is by default).
-You'll log in as the admin user with your own email/password — no separate
-"users" system needed for a single-operator tool like this.
+The app itself now has real login/logout:
+
+- `/login` — email/password sign in and sign up (same form, two buttons).
+- `/dashboard` — protected by `middleware.ts`; anonymous requests get
+  redirected to `/login`, and logged-in users hitting `/login` get bounced to
+  `/dashboard`.
+- `/` — redirects to whichever of the two applies.
+
+To create your admin account, run the app (`npm run dev` or visit the
+deployed URL) and use the **Sign up** button on `/login` once.
+
+Check **Supabase Auth → Providers → Email → Confirm email**:
+- **Off** (default on new projects until you change it) — sign up logs you in
+  immediately.
+- **On** — sign up sends a confirmation email; you must click it before
+  `signInWithPassword` will succeed. Either is fine for a single-operator
+  tool; turn confirmation off if you want zero friction.
 
 Native Threads/Meta OAuth is a separate, heavier flow (Meta app review, Threads
-API scopes) — that's tied to Module 4, not login. For now, use Supabase's
-built-in email auth to gate the dashboard; connect the Threads Graph API
-credentials separately for posting.
+API scopes) — that's tied to Module 4 (posting), not login. Supabase email
+auth gates the dashboard; the Threads Graph API credentials are connected
+separately for posting.
 
 ### 7. Run it
 ```bash
@@ -142,6 +157,8 @@ environments per branch/PR, enable **PR Environments** in the service
 settings.
 
 ## What's next
+
+Auth is done — `/login`, `/dashboard`, and route protection all work.
 
 - **Module 1**: `creators` CRUD UI + a scraper integration (RapidAPI Threads
   scraper is the pragmatic starting point — the official API has no endpoint
