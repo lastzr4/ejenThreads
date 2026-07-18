@@ -85,24 +85,39 @@ export async function fetchPostsForCreator(formData: FormData) {
     debugPayload = { postsFound: posts.length, raw };
 
     if (posts.length > 0) {
-      const rows = posts
+      const withIds = posts
         .map((p) => ({ ...p, resolvedId: resolvePostId(p) }))
-        .filter((p) => p.resolvedId)
-        .map((p) => ({
-          creator_id: id,
-          platform_post_id: p.resolvedId,
-          post_url: p.postUrl,
-          content_text: p.contentText,
-          media_urls: p.mediaUrls,
-          like_count: p.likeCount,
-          reply_count: p.replyCount,
-          repost_count: p.repostCount,
-          share_count: p.shareCount,
-          is_reply: p.isReply,
-          parent_post_id: p.parentPostId,
-          published_at: p.publishedAt,
-          raw_data: p.raw
-        }));
+        .filter((p) => p.resolvedId);
+
+      // Postgres rejects an upsert batch containing two rows with the same
+      // conflict target ("ON CONFLICT DO UPDATE command cannot affect row
+      // a second time") — e.g. the DOM extractor can pick up the same post
+      // twice (a reply nested inside its parent's container can separately
+      // match the byline+time pattern). Keep the first occurrence of each
+      // platform_post_id so the batch is safe to upsert regardless of why
+      // the duplicate happened.
+      const dedupedById = new Map<string, (typeof withIds)[number]>();
+      for (const p of withIds) {
+        if (!dedupedById.has(p.resolvedId as string)) {
+          dedupedById.set(p.resolvedId as string, p);
+        }
+      }
+
+      const rows = Array.from(dedupedById.values()).map((p) => ({
+        creator_id: id,
+        platform_post_id: p.resolvedId,
+        post_url: p.postUrl,
+        content_text: p.contentText,
+        media_urls: p.mediaUrls,
+        like_count: p.likeCount,
+        reply_count: p.replyCount,
+        repost_count: p.repostCount,
+        share_count: p.shareCount,
+        is_reply: p.isReply,
+        parent_post_id: p.parentPostId,
+        published_at: p.publishedAt,
+        raw_data: p.raw
+      }));
 
       if (rows.length > 0) {
         const { error: insertError } = await supabase
