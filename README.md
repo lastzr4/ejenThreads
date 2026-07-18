@@ -193,25 +193,66 @@ small-scale tools like this one, but it's a grey area — keep request
 volume low (this is a manual, one-click-per-creator flow, not a crawler)
 and be aware an IP or account could get rate-limited.
 
-### If it doesn't find posts
+### Current status (confirmed against a live page)
 
-Threads' profile pages are client-rendered React with typically
-hashed/obfuscated class names, so this was built and shipped **without
-being able to verify it against a live page** in this environment. The
-scraper tries two strategies in order — an embedded JSON state blob in a
-`<script>` tag (reliable, structured data, if the page has one), then a DOM
-fallback using `<article>`/`role="article"` elements (more likely to
-survive a redesign than utility-class selectors, but engagement counts
-aren't extracted by the fallback since those need real selectors to find).
+Verified 2026-07-18 against `@ed.puteri`: the scraper successfully pulls
+recent posts (text, URL, published date) into `scraped_threads`. Two known
+limits, both by Threads' own design, not bugs:
 
-If a fetch returns zero posts, open the newest row in `scraped_threads` for
-that creator in the Supabase table editor and check `raw_data`:
-- If it has an `html` field, no posts were found at all — that's a chunk of
-  the actual rendered page. Share it (or the relevant snippet) and the
-  selectors in `extractFromDom()`/`extractEmbeddedJson()` can be corrected.
-- If it has real post data but wrong/missing fields, `normalizeThreadsPost()`
-  in `lib/threads/scraper.ts` needs its field-name lookups adjusted —
-  nothing is lost either way since the raw payload is always preserved.
+- **Only ~3-4 posts per fetch.** Threads server-renders a small preview for
+  logged-out visitors, then shows "Log in to see more." Re-running **Fetch
+  recent posts** periodically still grows your history over time (new posts
+  get added, already-seen ones just update) — no extra setup needed. See
+  below if you want full history instead.
+- **Engagement counts (likes/replies/reposts) aren't captured yet.** The
+  numbers render as bare digits with no accessible label tying a number to
+  what it counts, so `scraped_threads.like_count` etc. are currently 0 for
+  DOM-scraped rows. Fixing this needs inspecting real post markup further —
+  the `raw_data` column always has what was extracted, for whenever that's
+  worth revisiting.
+
+If a fetch ever returns zero posts, check `creators.last_fetch_debug` for
+that creator (or the newest `scraped_threads.raw_data` row): a `bodyText`
+field with a login-wall message means Threads changed what it shows
+logged-out visitors; a `samples` field with real markup means the
+`extractFromDom()` selectors in `lib/threads/scraper.ts` need adjusting for
+a page redesign.
+
+### Getting full post history (optional, has account risk)
+
+By default the scraper is anonymous — no login, no keys, but capped at the
+~3-4 post preview above. You can optionally log it into a real Threads
+account to see everything, at a real cost: **this ties scraping activity to
+that account, run from Railway's servers (a different network than wherever
+you logged in) — Meta can treat that as suspicious and force a re-login,
+a verification challenge, or restrict the account.** Only do this with an
+account you're comfortable putting at that risk (not your main personal
+account, ideally).
+
+Claude does not perform this login for you — it requires typing your own
+credentials into a real browser window you control. Setup:
+
+1. `npx playwright install chromium` (one-time, installs a local browser
+   for the script below — separate from the Docker image Railway uses).
+2. `node scripts/capture-threads-session.mjs` — opens a visible Chromium
+   window at Threads' login page. Log in exactly as you normally would
+   (2FA, verification steps, all handled by you in that window). Once
+   you're on your home feed, return to the terminal and press Enter.
+3. This saves `threads-session-state.json` locally — **treat this file
+   exactly like a password.** It's already gitignored. Base64-encode it:
+   ```powershell
+   [Convert]::ToBase64String([IO.File]::ReadAllBytes("threads-session-state.json"))
+   ```
+4. Paste the output as `THREADS_SESSION_STATE_B64` in Railway → Variables
+   (and `.env.local` if testing locally). Delete the local JSON file once
+   it's safely in Railway.
+5. Redeploy. `lib/threads/scraper.ts` picks it up automatically — no other
+   code changes needed. If it's ever unset or fails to parse, scraping
+   silently falls back to anonymous mode rather than breaking.
+
+Sessions can expire or get revoked by Meta at any time (that's the risk
+described above) — if fetches start returning the anonymous 3-4 post
+preview again after this was working, the session likely needs recapturing.
 
 ## What's next
 

@@ -244,6 +244,30 @@ async function getBrowser(): Promise<Browser> {
 }
 
 /**
+ * Optional: a logged-in Threads session, captured locally via
+ * scripts/capture-threads-session.mjs and stored as a base64-encoded env
+ * var (never committed to git). When present, the scraper sees the full
+ * logged-in view of a profile instead of the ~3-4 post preview anonymous
+ * visitors get. When absent, scraping proceeds anonymously — this is
+ * purely additive, nothing else changes.
+ *
+ * Using this ties scraping activity to a real Threads/Instagram account
+ * and runs it from Railway's IP rather than the account owner's — Meta
+ * may treat that as suspicious and force a re-login or restrict the
+ * account. That risk was discussed with the user before this was added.
+ */
+function loadStoredSessionState(): Record<string, unknown> | undefined {
+  const b64 = process.env.THREADS_SESSION_STATE_B64;
+  if (!b64) return undefined;
+  try {
+    return JSON.parse(Buffer.from(b64, "base64").toString("utf-8"));
+  } catch {
+    console.warn("THREADS_SESSION_STATE_B64 is set but failed to parse — scraping anonymously.");
+    return undefined;
+  }
+}
+
+/**
  * Fetch recent posts for a Threads username by rendering their public
  * profile page in headless Chromium. Returns normalized posts plus
  * whatever raw data we extracted (stored in `scraped_threads.raw_data`
@@ -252,10 +276,15 @@ async function getBrowser(): Promise<Browser> {
 export async function fetchCreatorPosts(username: string): Promise<FetchCreatorPostsResult> {
   const handle = username.trim().replace(/^@/, "");
   const browser = await getBrowser();
+  const storageState = loadStoredSessionState();
   const context = await browser.newContext({
     userAgent:
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-      "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+      "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+    // Cast: Playwright's storageState option type is stricter than the
+    // plain object we get back from decoding JSON, but the shape (parsed
+    // output of context.storageState()) matches exactly at runtime.
+    ...(storageState ? { storageState: storageState as any } : {})
   });
   const page = await context.newPage();
 

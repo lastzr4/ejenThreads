@@ -29,3 +29,7 @@ supabase/.temp
 # railway
 .railway
 .git-history.bundle
+
+# Threads session state (as sensitive as a password — see
+# scripts/capture-threads-session.mjs). Never commit this.
+threads-session-state.json
