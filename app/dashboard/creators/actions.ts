@@ -74,8 +74,15 @@ export async function fetchPostsForCreator(formData: FormData) {
   // Collect an error message instead and redirect once, at the end.
   let errorMessage: string | null = null;
 
+  // Always captured and saved to creators.last_fetch_debug, whether the
+  // scrape succeeds, finds zero posts, or throws — so a failed/empty
+  // attempt is debuggable via the Supabase table editor (or a connected
+  // Supabase MCP) without needing another round of guessing.
+  let debugPayload: unknown = null;
+
   try {
-    const { posts } = await fetchCreatorPosts(username);
+    const { posts, raw } = await fetchCreatorPosts(username);
+    debugPayload = { postsFound: posts.length, raw };
 
     if (posts.length > 0) {
       const rows = posts
@@ -107,16 +114,18 @@ export async function fetchPostsForCreator(formData: FormData) {
         }
       }
     }
-
-    if (!errorMessage) {
-      await supabase
-        .from("creators")
-        .update({ last_scraped_at: new Date().toISOString() })
-        .eq("id", id);
-    }
   } catch (err) {
     errorMessage = err instanceof Error ? err.message : "Scraper request failed";
+    debugPayload = { error: errorMessage };
   }
+
+  await supabase
+    .from("creators")
+    .update({
+      last_scraped_at: new Date().toISOString(),
+      last_fetch_debug: debugPayload
+    })
+    .eq("id", id);
 
   revalidatePath(`/dashboard/creators/${id}`);
   redirect(
