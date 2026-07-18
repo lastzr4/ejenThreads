@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { fetchPostsForCreator } from "../actions";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/submit-button";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default async function CreatorDetailPage({
@@ -41,7 +41,7 @@ export default async function CreatorDetailPage({
           <form action={fetchPostsForCreator}>
             <input type="hidden" name="id" value={creator.id} />
             <input type="hidden" name="username" value={creator.username} />
-            <Button type="submit">Fetch recent posts</Button>
+            <SubmitButton pendingText="Fetching… (10-15s)">Fetch recent posts</SubmitButton>
           </form>
         </div>
         <p className="mt-1 text-sm text-slate-500">

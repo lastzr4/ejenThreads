@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { addCreator, deleteCreator } from "./actions";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/submit-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,7 +38,7 @@ export default async function CreatorsPage({
               <Label htmlFor="username">Username</Label>
               <Input id="username" name="username" placeholder="zuck" required />
             </div>
-            <Button type="submit">Add</Button>
+            <SubmitButton pendingText="Adding…">Add</SubmitButton>
           </form>
           {(searchParams?.error || error) && (
             <p className="mt-3 text-sm text-red-600">{searchParams?.error ?? error?.message}</p>
@@ -66,9 +66,9 @@ export default async function CreatorsPage({
                 </div>
                 <form action={deleteCreator}>
                   <input type="hidden" name="id" value={creator.id} />
-                  <Button variant="ghost" size="sm" type="submit">
+                  <SubmitButton variant="ghost" size="sm" pendingText="Removing…">
                     Remove
-                  </Button>
+                  </SubmitButton>
                 </form>
               </CardContent>
             </Card>
