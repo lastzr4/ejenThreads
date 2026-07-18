@@ -7,21 +7,27 @@
 // (see /Dockerfile) is based on mcr.microsoft.com/playwright, which ships
 // Chromium + every system library it needs preinstalled.
 //
-// IMPORTANT — this is best-effort and UNVERIFIED against a live page:
-// Threads' public profile pages are a React app with class names that are
-// typically hashed/obfuscated, so scraping by CSS class is fragile. This
-// client tries two strategies, in order:
-//   1. Look for a server-embedded JSON state blob in a <script> tag
-//      (common in React/Next-style SSR apps) — if found, this is far more
-//      reliable than DOM scraping since it's structured data.
-//   2. Fall back to DOM scraping using semantic/structural selectors
-//      (<article> elements, <time datetime> for timestamps) that are more
-//      likely to survive a redesign than utility-class selectors.
+// Confirmed against a live page (2026-07-18, @ed.puteri): Threads renders a
+// handful of recent public posts server-side, then shows a "Log in to see
+// more" wall — no <article>/role="article" markup (that was an early
+// guess that found nothing). What actually works: each post has a small
+// byline link back to the author's own profile (href="/@handle"); walking
+// up from that link to the nearest ancestor containing a <time> element
+// gives the real post container. Two strategies, in order:
+//   1. Look for a server-embedded JSON state blob in a <script> tag — if
+//      found, this is far more reliable than DOM scraping since it's
+//      structured data. Hasn't been confirmed present on Threads yet, but
+//      cheap to check first.
+//   2. DOM scraping via the byline+<time> pattern described above.
 //
-// If neither strategy finds posts, the full page HTML is preserved in the
-// `raw` field (and gets stored in `scraped_threads.raw_data`) specifically
-// so you can inspect real markup and tell me what to fix — the equivalent
-// of what raw_data already did for the RapidAPI attempt.
+// Known gap: engagement counts (likes/replies/reposts) aren't mapped yet —
+// the numbers render as bare digits with no accessible label tying a
+// number to what it counts, at least not in a way this pass captures.
+//
+// If neither strategy finds posts, bodyText plus outerHTML samples around
+// any byline links are preserved in the `raw` field (stored in
+// `scraped_threads.raw_data` / `creators.last_fetch_debug`) so real markup
+// can be inspected without another blind round.
 //
 // Legal note: Meta's Threads Terms of Service discourage automated
 // scraping without permission. This is a common practice for personal/
@@ -148,34 +154,84 @@ async function extractEmbeddedJson(page: import("playwright").Page): Promise<any
 }
 
 /**
- * DOM-scraping fallback: pull post-like content out of <article> elements
- * (or elements with role="article"), which is the most likely stable
- * structural marker to survive a redesign, even if class names change.
+ * DOM-scraping fallback. Confirmed against a live page (2026-07-18): Threads
+ * does NOT use <article>/role="article" — that guess found nothing. What
+ * does work: each post has a small byline link back to the author's own
+ * profile (e.g. `href="/@ed.puteri"`), repeated once per post, distinct
+ * from the one-off profile header. We find every such byline and walk up
+ * to the nearest ancestor that also contains a timestamp <time> element —
+ * that ancestor is the post container.
  */
-async function extractFromDom(page: import("playwright").Page): Promise<Record<string, any>[]> {
-  return page.evaluate(() => {
-    const nodes = Array.from(
-      document.querySelectorAll('article, [role="article"]')
-    );
-
-    return nodes.map((node) => {
-      const text = (node as HTMLElement).innerText?.trim() ?? "";
-      const timeEl = node.querySelector("time[datetime]");
-      const linkEl = node.querySelector('a[href*="/post/"]') as HTMLAnchorElement | null;
-      const img = node.querySelector("img[src]") as HTMLImageElement | null;
-
-      // Engagement counts aren't reliably labeled without inspecting real
-      // markup — leaving these at 0 here is intentional; likes/replies/
-      // reposts will need real selectors once you can see the actual DOM
-      // (e.g. via aria-label="Like", aria-label="Reply" buttons).
-      return {
-        text,
-        url: linkEl?.href ?? null,
-        created_at: timeEl?.getAttribute("datetime") ?? null,
-        media: img?.src ? [img.src] : []
-      };
+async function extractFromDom(page: import("playwright").Page, handle: string): Promise<Record<string, any>[]> {
+  return page.evaluate((targetHandle: string) => {
+    const hrefSuffix = `/@${targetHandle}`.toLowerCase();
+    const bylineLinks = Array.from(document.querySelectorAll("a[href]")).filter((a) => {
+      const href = (a as HTMLAnchorElement).getAttribute("href")?.toLowerCase() ?? "";
+      return href === hrefSuffix || href === hrefSuffix + "/";
     });
-  });
+
+    const seen = new Set<Element>();
+    const posts: Record<string, any>[] = [];
+
+    for (const link of bylineLinks) {
+      // Walk up a handful of levels looking for a container that has a
+      // <time> element — that's the actual post card, not just the byline.
+      let container: HTMLElement | null = link.parentElement;
+      let timeEl: Element | null = null;
+      for (let depth = 0; depth < 8 && container; depth++) {
+        timeEl = container.querySelector("time");
+        if (timeEl) break;
+        container = container.parentElement;
+      }
+      if (!container || !timeEl || seen.has(container)) continue;
+      seen.add(container);
+
+      // Raw innerText includes the byline/timestamp/engagement-count noise
+      // around the actual post text — strip leading username/date lines
+      // and trailing bare-number lines (confirmed structure from a live
+      // page: username, [optional community tag], relative time, text,
+      // [Translate], count, count, ...).
+      const rawLines = ((container as HTMLElement).innerText ?? "")
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(Boolean);
+      const dateLike = /^\d+[dhwms]$|^\d{1,2}\/\d{1,2}\/\d{2,4}$/i;
+      while (
+        rawLines.length > 0 &&
+        (rawLines[0].toLowerCase() === targetHandle.toLowerCase() || dateLike.test(rawLines[0]))
+      ) {
+        rawLines.shift();
+      }
+      while (
+        rawLines.length > 0 &&
+        (/^\d+$/.test(rawLines[rawLines.length - 1]) ||
+          rawLines[rawLines.length - 1].toLowerCase() === "translate")
+      ) {
+        rawLines.pop();
+      }
+      const text = rawLines.join(" ").trim();
+
+      // Post URL: any link inside the container pointing at a specific
+      // post (Threads post URLs contain "/post/").
+      const postLink = container.querySelector('a[href*="/post/"]') as HTMLAnchorElement | null;
+      const img = container.querySelector('img[src]:not([src*="profile"])') as HTMLImageElement | null;
+
+      posts.push({
+        text,
+        url: postLink?.href ?? null,
+        created_at: timeEl.getAttribute("datetime") ?? timeEl.getAttribute("title") ?? null,
+        created_at_relative: (timeEl as HTMLElement).innerText ?? null,
+        media: img?.src ? [img.src] : []
+        // Engagement counts (likes/replies/reposts) are still not mapped
+        // here — Threads doesn't appear to label them with accessible text
+        // adjacent to the number in a way this pass captures. That's the
+        // next thing to fix once raw_data from a real successful row can
+        // be inspected.
+      });
+    }
+
+    return posts;
+  }, handle);
 }
 
 let sharedBrowser: Browser | null = null;
@@ -221,24 +277,40 @@ export async function fetchCreatorPosts(username: string): Promise<FetchCreatorP
       }
     }
 
-    const domPosts = await extractFromDom(page);
+    const domPosts = await extractFromDom(page, handle);
     if (domPosts.length > 0) {
       return { posts: domPosts.map(normalizeThreadsPost), raw: domPosts };
     }
 
-    // Nothing found by either strategy. page.content() returns from <head>,
-    // and Threads' <head> is large enough (inline CSS variables, meta tags)
-    // to blow past a reasonable size cap before ever reaching <body> — so
-    // capture body text/HTML specifically instead, which is what actually
-    // shows whether there's a login wall vs. posts our selectors missed.
-    const diagnostic = await page.evaluate(() => {
-      const body = document.body;
+    // Nothing found by either strategy. Capture bodyText (cheap sanity
+    // check — confirms real content vs. a login wall) plus outerHTML
+    // samples around any byline links matching this handle, so the actual
+    // post container markup is visible without wasting the size cap on
+    // <head> boilerplate or preloaded <script> JSON payloads.
+    const diagnostic = await page.evaluate((targetHandle: string) => {
+      const hrefSuffix = `/@${targetHandle}`.toLowerCase();
+      const bylineLinks = Array.from(document.querySelectorAll("a[href]")).filter((a) => {
+        const href = (a as HTMLAnchorElement).getAttribute("href")?.toLowerCase() ?? "";
+        return href === hrefSuffix || href === hrefSuffix + "/";
+      });
+
+      const samples = bylineLinks.slice(0, 4).map((link) => {
+        const p1 = link.parentElement;
+        const p2 = p1?.parentElement;
+        const p3 = p2?.parentElement;
+        return {
+          linkHtml: link.outerHTML?.slice(0, 300),
+          ancestor3Html: p3?.outerHTML?.slice(0, 4_000) ?? null
+        };
+      });
+
       return {
-        bodyText: body?.innerText?.slice(0, 6_000) ?? null,
-        bodyHtml: body?.innerHTML?.slice(0, 15_000) ?? null,
-        title: document.title
+        bodyText: document.body?.innerText?.slice(0, 4_000) ?? null,
+        title: document.title,
+        bylineLinkCount: bylineLinks.length,
+        samples
       };
-    });
+    }, handle);
     return { posts: [], raw: { note: "No posts extracted", ...diagnostic } };
   } finally {
     await context.close();
