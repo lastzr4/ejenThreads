@@ -226,10 +226,20 @@ export async function fetchCreatorPosts(username: string): Promise<FetchCreatorP
       return { posts: domPosts.map(normalizeThreadsPost), raw: domPosts };
     }
 
-    // Nothing found by either strategy — return the raw HTML so it can be
-    // inspected and the selectors above adjusted.
-    const html = await page.content();
-    return { posts: [], raw: { note: "No posts extracted", html: html.slice(0, 20_000) } };
+    // Nothing found by either strategy. page.content() returns from <head>,
+    // and Threads' <head> is large enough (inline CSS variables, meta tags)
+    // to blow past a reasonable size cap before ever reaching <body> — so
+    // capture body text/HTML specifically instead, which is what actually
+    // shows whether there's a login wall vs. posts our selectors missed.
+    const diagnostic = await page.evaluate(() => {
+      const body = document.body;
+      return {
+        bodyText: body?.innerText?.slice(0, 6_000) ?? null,
+        bodyHtml: body?.innerHTML?.slice(0, 15_000) ?? null,
+        title: document.title
+      };
+    });
+    return { posts: [], raw: { note: "No posts extracted", ...diagnostic } };
   } finally {
     await context.close();
   }
