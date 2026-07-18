@@ -120,9 +120,21 @@ Visit http://localhost:3000.
 
 ## Deploying to Railway
 
-This scaffold is Railway-ready: `railway.json` pins the Nixpacks builder,
-`.node-version` pins Node 20, and `npm start` binds to Railway's injected
-`$PORT`. Using the GitHub + dashboard flow (auto-deploys on every push):
+This scaffold is Railway-ready. `railway.json` points Railway at the
+`Dockerfile` (not Nixpacks — see below for why), and `npm start` binds to
+Railway's injected `$PORT`. Using the GitHub + dashboard flow (auto-deploys
+on every push):
+
+**Why Docker instead of Nixpacks:** Module 1's scraper runs headless
+Chromium via Playwright, which needs a pile of system libraries (fonts,
+codecs, etc.) that Nixpacks doesn't supply out of the box. The `Dockerfile`
+builds from `mcr.microsoft.com/playwright`, Microsoft's official image with
+Chromium and all its dependencies preinstalled, so this just works without
+hand-picking apt packages. Expect a heavier/slower build than a plain
+Next.js app (the base image alone is ~1-2GB) and keep an eye on Railway's
+memory limits — a headless browser is not free to run; if you're on a
+constrained plan, fetching posts for one creator at a time rather than in
+bulk keeps memory usage predictable.
 
 ### 1. Push to GitHub
 ```bash
@@ -136,16 +148,17 @@ git push -u origin main
 
 ### 2. Connect Railway to the repo
 1. In the Railway dashboard, **New Project → Deploy from GitHub repo**.
-2. Authorize Railway's GitHub App and select the `ttagent` repo.
-3. Railway detects `railway.json` and Nixpacks builds it automatically —
-   no Dockerfile needed.
+2. Authorize Railway's GitHub App and select the repo.
+3. Railway reads `railway.json`, sees `"builder": "DOCKERFILE"`, and builds
+   from `/Dockerfile` automatically.
 
 ### 3. Set environment variables
 In the Railway service → **Variables**, add everything from `.env.example`:
 `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
-`SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`, and the Threads
-scraper/API keys once you have them. Railway injects `PORT` itself — don't
-set that one.
+`SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`. Railway injects `PORT`
+itself — don't set that one. Nothing is needed for the Threads scraper
+(Module 1) — it's a self-hosted Playwright scraper now, no API keys
+required.
 
 ### 4. Deploy
 Railway builds and deploys on push automatically. Watch progress under
@@ -159,26 +172,46 @@ settings.
 ## Module 1: Creator Tracker & Scraper
 
 Live at `/dashboard/creators`. Add a Threads username, open it, click
-**Fetch recent posts** — that calls a RapidAPI Threads scraper and upserts
-the results into `scraped_threads`.
+**Fetch recent posts**. No API keys or subscriptions to set up — the
+scraper renders the creator's public Threads profile in headless Chromium
+(Playwright) and extracts posts from the page itself.
 
-### Set up the scraper
+### Why not a RapidAPI listing?
 
-1. On RapidAPI, subscribe to a "Threads scraper" listing (search the
-   marketplace — several exist, pricing/free-tier varies by provider).
-2. Open its **Test Endpoint** panel for the "get user posts" endpoint and
-   copy three things into `.env.local` (and Railway → Variables):
-   - `THREADS_SCRAPER_BASE_URL` — the full endpoint URL.
-   - `THREADS_SCRAPER_HOST` — the `X-RapidAPI-Host` value shown there.
-   - `THREADS_SCRAPER_API_KEY` — your RapidAPI key.
-3. `lib/threads/scraper.ts` normalizes the response with fallback field
-   lookups covering the field names most listings use (`likes`/`like_count`,
-   `text`/`caption`, etc.). **Different listings return different shapes** —
-   if posts come back with missing likes/text/dates after your first fetch,
-   open a row's `raw_data` column in the Supabase table editor to see the
-   real field names and adjust `normalizeThreadsPost()` accordingly. Nothing
-   is lost in the meantime — the full raw payload is always saved to
-   `raw_data` regardless of whether normalization mapped it correctly.
+We tried three separate "Threads scraper" listings on RapidAPI first — all
+three were dead (`"User not found"` for even well-known accounts, or
+`"API is unreachable"` straight from RapidAPI's own gateway diagnostics).
+Given this app already runs as a persistent Node process on Railway (not a
+serverless function), self-hosting a headless browser was the more
+reliable option, so `lib/threads/scraper.ts` was rewritten around
+Playwright instead. See `/Dockerfile` for how Railway builds the Chromium
+runtime this needs.
+
+**Legal note:** Meta's Threads Terms of Service discourage automated
+scraping without permission. This is common practice for personal/
+small-scale tools like this one, but it's a grey area — keep request
+volume low (this is a manual, one-click-per-creator flow, not a crawler)
+and be aware an IP or account could get rate-limited.
+
+### If it doesn't find posts
+
+Threads' profile pages are client-rendered React with typically
+hashed/obfuscated class names, so this was built and shipped **without
+being able to verify it against a live page** in this environment. The
+scraper tries two strategies in order — an embedded JSON state blob in a
+`<script>` tag (reliable, structured data, if the page has one), then a DOM
+fallback using `<article>`/`role="article"` elements (more likely to
+survive a redesign than utility-class selectors, but engagement counts
+aren't extracted by the fallback since those need real selectors to find).
+
+If a fetch returns zero posts, open the newest row in `scraped_threads` for
+that creator in the Supabase table editor and check `raw_data`:
+- If it has an `html` field, no posts were found at all — that's a chunk of
+  the actual rendered page. Share it (or the relevant snippet) and the
+  selectors in `extractFromDom()`/`extractEmbeddedJson()` can be corrected.
+- If it has real post data but wrong/missing fields, `normalizeThreadsPost()`
+  in `lib/threads/scraper.ts` needs its field-name lookups adjusted —
+  nothing is lost either way since the raw payload is always preserved.
 
 ## What's next
 

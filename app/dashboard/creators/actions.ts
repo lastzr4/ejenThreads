@@ -1,12 +1,26 @@
 "use server";
 
+import { createHash } from "crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { fetchCreatorPosts } from "@/lib/threads/scraper";
+import { fetchCreatorPosts, type NormalizedThreadsPost } from "@/lib/threads/scraper";
 
 function cleanUsername(raw: string): string {
   return raw.trim().replace(/^@/, "");
+}
+
+/**
+ * The scraper's DOM fallback (see lib/threads/scraper.ts) may not find an
+ * explicit post id or URL. Rather than silently dropping those rows (the
+ * table requires platform_post_id), derive a stable id from the content
+ * itself — same post content always hashes to the same id, so re-fetching
+ * still dedupes correctly via the upsert below.
+ */
+function resolvePostId(post: NormalizedThreadsPost): string | null {
+  if (post.platformPostId) return post.platformPostId;
+  if (!post.contentText) return null;
+  return "hash_" + createHash("sha256").update(post.contentText).digest("hex").slice(0, 32);
 }
 
 export async function addCreator(formData: FormData) {
@@ -65,10 +79,11 @@ export async function fetchPostsForCreator(formData: FormData) {
 
     if (posts.length > 0) {
       const rows = posts
-        .filter((p) => p.platformPostId)
+        .map((p) => ({ ...p, resolvedId: resolvePostId(p) }))
+        .filter((p) => p.resolvedId)
         .map((p) => ({
           creator_id: id,
-          platform_post_id: p.platformPostId,
+          platform_post_id: p.resolvedId,
           post_url: p.postUrl,
           content_text: p.contentText,
           media_urls: p.mediaUrls,
