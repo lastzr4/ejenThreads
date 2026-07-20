@@ -13,7 +13,6 @@ echo when it asks you to.
 echo.
 echo Do NOT close this window until it says "Saved session to ...".
 echo.
-pause
 
 where node >nul 2>nul
 if errorlevel 1 (
