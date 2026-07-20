@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "TTAgent — Threads Agent",
-  description: "Analyze Threads creators, generate on-brand posts, and schedule them automatically."
+  title: "CopyCreator",
+  description: "Study successful Threads creators and generate on-brand posts in their style."
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

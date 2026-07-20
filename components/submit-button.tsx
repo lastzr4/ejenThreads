@@ -15,11 +15,16 @@ interface SubmitButtonProps extends ButtonProps {
  * nearest parent form's pending state) — this is why it's a separate
  * client component rather than logic inlined into the server component page.
  */
-export function SubmitButton({ children, pendingText, className, ...props }: SubmitButtonProps) {
+export function SubmitButton({ children, pendingText, className, disabled, ...props }: SubmitButtonProps) {
   const { pending } = useFormStatus();
 
   return (
-    <Button type="submit" disabled={pending} className={cn("gap-2", className)} {...props}>
+    <Button
+      type="submit"
+      disabled={pending || disabled}
+      className={cn("gap-2", className)}
+      {...props}
+    >
       {pending && (
         <span
           aria-hidden="true"

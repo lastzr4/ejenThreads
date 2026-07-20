@@ -244,19 +244,13 @@ async function getBrowser(): Promise<Browser> {
 }
 
 /**
- * Optional: a logged-in Threads session, captured locally via
- * scripts/capture-threads-session.mjs and stored as a base64-encoded env
- * var (never committed to git). When present, the scraper sees the full
- * logged-in view of a profile instead of the ~3-4 post preview anonymous
- * visitors get. When absent, scraping proceeds anonymously — this is
- * purely additive, nothing else changes.
- *
- * Using this ties scraping activity to a real Threads/Instagram account
- * and runs it from Railway's IP rather than the account owner's — Meta
- * may treat that as suspicious and force a re-login or restrict the
- * account. That risk was discussed with the user before this was added.
+ * Optional fallback: a logged-in Threads session via base64-encoded env
+ * var, for setups that prefer Railway Variables over the in-app Settings
+ * page (app/dashboard/settings). The primary path is now passing
+ * sessionState directly into fetchCreatorPosts() — see below — loaded by
+ * the caller from `user_settings.threads_session_state` in Supabase.
  */
-function loadStoredSessionState(): Record<string, unknown> | undefined {
+function loadSessionStateFromEnv(): Record<string, unknown> | undefined {
   const b64 = process.env.THREADS_SESSION_STATE_B64;
   if (!b64) return undefined;
   try {
@@ -272,11 +266,24 @@ function loadStoredSessionState(): Record<string, unknown> | undefined {
  * profile page in headless Chromium. Returns normalized posts plus
  * whatever raw data we extracted (stored in `scraped_threads.raw_data`
  * for reprocessing/debugging).
+ *
+ * @param sessionState Optional captured Threads/Instagram session
+ *   (Playwright storageState shape — an object with `cookies`/`origins`),
+ *   typically loaded by the caller from `user_settings.threads_session_state`
+ *   (see app/dashboard/settings). When present, scraping sees the full
+ *   logged-in view instead of the ~3-4 post anonymous preview. Using this
+ *   ties scraping to a real account and runs it from this server's IP
+ *   rather than the account owner's — Meta may treat that as suspicious.
+ *   Falls back to THREADS_SESSION_STATE_B64 env var, then to anonymous
+ *   scraping, if not provided.
  */
-export async function fetchCreatorPosts(username: string): Promise<FetchCreatorPostsResult> {
+export async function fetchCreatorPosts(
+  username: string,
+  sessionState?: Record<string, unknown> | null
+): Promise<FetchCreatorPostsResult> {
   const handle = username.trim().replace(/^@/, "");
   const browser = await getBrowser();
-  const storageState = loadStoredSessionState();
+  const storageState = sessionState ?? loadSessionStateFromEnv();
   const context = await browser.newContext({
     userAgent:
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +

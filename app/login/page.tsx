@@ -13,7 +13,7 @@ export default function LoginPage({
     <main className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>TTAgent</CardTitle>
+          <CardTitle>CopyCreator</CardTitle>
           <CardDescription>Sign in to manage your Threads creator tracker.</CardDescription>
         </CardHeader>
         <CardContent>

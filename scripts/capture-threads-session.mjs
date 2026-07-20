@@ -7,9 +7,10 @@
 // username/password, complete any 2FA or "verify it's you" step Meta asks
 // for. Once you're on your home feed, come back to this terminal and press
 // Enter. The script then saves the resulting session (cookies) to a local
-// JSON file, which the deployed scraper can load so it sees your full,
-// logged-in view of Threads instead of the ~3-4 post preview anonymous
-// visitors get.
+// JSON file. Paste that file's contents into the app's Settings page
+// (Dashboard -> Settings -> Threads session) so the deployed scraper can
+// load it and see your full, logged-in view of Threads instead of the
+// ~3-4 post preview anonymous visitors get.
 //
 // This script never sees, stores, or transmits your password anywhere —
 // you type it directly into Threads' own login page in the browser window
@@ -17,8 +18,8 @@
 // sensitive as a password: anyone who has it can act as your logged-in
 // session without knowing your password. Treat it accordingly:
 //   - Never commit it to git (already in .gitignore).
-//   - Delete the local copy once you've moved it into Railway's Variables.
-//   - Using it from Railway's servers (a different network than the one
+//   - Delete the local copy once you've pasted it into Settings.
+//   - Using it from this app's server (a different network than the one
 //     you logged in from) is a real risk to your account — Meta may flag
 //     this as suspicious and force a re-login, a verification challenge,
 //     or a temporary restriction.
@@ -61,8 +62,8 @@ async function main() {
 
   console.log(`\nSaved session to ${OUTPUT_PATH}.`);
   console.log("This file is as sensitive as a password — do not commit it, do not share it.");
-  console.log("Next step: base64-encode it and add it to Railway as THREADS_SESSION_STATE_B64,");
-  console.log("then delete the local file. See README.md for the exact command.");
+  console.log("Next step: open the file, copy its full contents, and paste them into");
+  console.log("Dashboard -> Settings -> Threads session in the app. Then delete this local file.");
 
   await browser.close();
 }

@@ -1,7 +1,8 @@
-# TTAgent (Threads Agent)
+# CopyCreator
 
 AI pipeline that studies successful Threads creators, learns their style, generates
-new posts/threads in that style, and schedules them to your own Threads account.
+new posts/threads in that style, and schedules them to your own Threads account —
+built toward eventual auto-affiliate content workflows.
 
 ## Architecture
 
@@ -254,17 +255,39 @@ Sessions can expire or get revoked by Meta at any time (that's the risk
 described above) — if fetches start returning the anonymous 3-4 post
 preview again after this was working, the session likely needs recapturing.
 
+## Module 2: AI Style Analyzer
+
+Live on each creator's detail page (`/dashboard/creators/[id]`): a **Study**
+button (disabled until at least one post is scraped) that sends every
+scraped post with text to Claude and writes back a structured style
+profile into `creator_analysis` — tone, hook patterns, thread structure,
+emoji usage, CTA patterns, vocabulary notes, and a condensed
+`generated_rules` style guide meant to be reused as Module 3's system
+prompt.
+
+Requires `ANTHROPIC_API_KEY` set (`.env.local` and Railway → Variables) —
+without it, clicking Study fails with a clear error rather than a silent
+crash. Uses `claude-sonnet-5` by default (`lib/anthropic/client.ts`); swap
+to `claude-opus-4-8` there for higher-effort analysis at higher cost.
+Structured output is extracted via forced tool-use (`record_creator_analysis`)
+rather than asking Claude to format raw JSON — much more reliable.
+
+Re-running Study overwrites the previous analysis for that creator (one
+row per creator; `sample_size` and `updated_at` tell you how current it is).
+
 ## What's next
 
-Auth (Module 0) and Module 1 (creator tracker + scraper) are done.
+Auth, Module 1 (creator tracker + scraper, including optional authenticated
+scraping via Settings), and Module 2 (style analyzer) are done.
 
-- **Module 2**: `/api/analyze` route calling Claude with a batch of a
-  creator's `scraped_threads`, writing structured output to `creator_analysis`.
-- **Module 3**: generation UI + `/api/generate` route using `generated_rules`
-  as system prompt context.
-- **Module 4**: `scheduled_posts` queue UI + a cron-triggered route that calls
-  the Threads Publishing API (`POST /{threads-user-id}/threads` to create a
+- **Module 3**: generation UI using `generated_rules` from `creator_analysis`
+  as system prompt context to draft new single posts / thread chains into
+  `scheduled_posts` as drafts.
+- **Module 4**: scheduler UI + a cron-triggered route that calls the
+  Threads Publishing API (`POST /{threads-user-id}/threads` to create a
   container, then `POST /{threads-user-id}/threads_publish` to publish —
-  official docs: https://developers.facebook.com/docs/threads).
+  official docs: https://developers.facebook.com/docs/threads) — this is
+  the piece that eventually enables the auto-affiliate posting workflow
+  CopyCreator is being built toward.
 
-Say the word and we'll start on Module 1.
+Say the word and we'll start on Module 3.

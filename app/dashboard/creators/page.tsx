@@ -17,6 +17,25 @@ export default async function CreatorsPage({
     .select("id, username, display_name, last_scraped_at, created_at")
     .order("created_at", { ascending: false });
 
+  // Per-creator totals (posts scraped + summed reply/comment counts) for
+  // the "how much have I got to study" summary on each card. One query
+  // for all creators rather than N+1.
+  const creatorIds = (creators ?? []).map((c) => c.id);
+  const statsByCreator = new Map<string, { posts: number; replies: number }>();
+  if (creatorIds.length > 0) {
+    const { data: postStats } = await supabase
+      .from("scraped_threads")
+      .select("creator_id, reply_count")
+      .in("creator_id", creatorIds);
+
+    for (const row of postStats ?? []) {
+      const entry = statsByCreator.get(row.creator_id) ?? { posts: 0, replies: 0 };
+      entry.posts += 1;
+      entry.replies += row.reply_count ?? 0;
+      statsByCreator.set(row.creator_id, entry);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -48,7 +67,9 @@ export default async function CreatorsPage({
 
       <div className="space-y-3">
         {creators && creators.length > 0 ? (
-          creators.map((creator) => (
+          creators.map((creator) => {
+            const stats = statsByCreator.get(creator.id);
+            return (
             <Card key={creator.id}>
               <CardContent className="flex items-center justify-between p-4">
                 <div>
@@ -62,6 +83,9 @@ export default async function CreatorsPage({
                     {creator.last_scraped_at
                       ? `Last scraped ${new Date(creator.last_scraped_at).toLocaleString()}`
                       : "Not scraped yet"}
+                    {stats && stats.posts > 0 && (
+                      <> · {stats.posts} post{stats.posts === 1 ? "" : "s"} scraped · {stats.replies} replies</>
+                    )}
                   </p>
                 </div>
                 <form action={deleteCreator}>
@@ -72,7 +96,8 @@ export default async function CreatorsPage({
                 </form>
               </CardContent>
             </Card>
-          ))
+            );
+          })
         ) : (
           <p className="text-sm text-slate-500">No creators tracked yet.</p>
         )}

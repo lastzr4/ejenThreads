@@ -80,8 +80,24 @@ export async function fetchPostsForCreator(formData: FormData) {
   // Supabase MCP) without needing another round of guessing.
   let debugPayload: unknown = null;
 
+  // Load a connected Threads session, if any (see app/dashboard/settings),
+  // so authenticated users get full post history instead of the anonymous
+  // ~3-4 post preview. Missing/null is fine — fetchCreatorPosts falls back
+  // to anonymous scraping.
+  const {
+    data: { user: currentUser }
+  } = await supabase.auth.getUser();
+  const { data: settingsRow } = currentUser
+    ? await supabase
+        .from("user_settings")
+        .select("threads_session_state")
+        .eq("user_id", currentUser.id)
+        .maybeSingle()
+    : { data: null };
+  const sessionState = (settingsRow?.threads_session_state as Record<string, unknown> | null) ?? null;
+
   try {
-    const { posts, raw } = await fetchCreatorPosts(username);
+    const { posts, raw } = await fetchCreatorPosts(username, sessionState);
     debugPayload = { postsFound: posts.length, raw };
 
     if (posts.length > 0) {
