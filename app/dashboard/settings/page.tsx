@@ -56,14 +56,31 @@ export default async function SettingsPage({
             </p>
             <p>
               This app never performs the login itself. You capture the session
-              yourself, locally, by running{" "}
-              <code className="rounded bg-amber-100 px-1">
+              yourself, locally, on your own computer.
+            </p>
+          </div>
+
+          <div className="rounded-md bg-slate-50 border border-slate-200 p-3 text-xs text-slate-700 space-y-1">
+            <p className="font-medium">How to connect:</p>
+            <ol className="list-decimal list-inside space-y-1">
+              <li>
+                In your project folder, double-click{" "}
+                <code className="rounded bg-slate-100 px-1">capture-threads-session.bat</code>{" "}
+                to start.
+              </li>
+              <li>A real Chromium window opens — log into Threads exactly as you normally would.</li>
+              <li>Once you&apos;re on your home feed, go back to that window and press Enter.</li>
+              <li>
+                Open the <code className="rounded bg-slate-100 px-1">threads-session-state.json</code>{" "}
+                file it creates, copy everything inside it, and paste it below.
+              </li>
+            </ol>
+            <p className="pt-1 text-slate-500">
+              (Not on Windows, or prefer the terminal? Run{" "}
+              <code className="rounded bg-slate-100 px-1">
                 node scripts/capture-threads-session.mjs
               </code>{" "}
-              on your own computer (see README &quot;Module 1&quot;), which opens a
-              real browser window for you to log into directly. That produces a{" "}
-              <code className="rounded bg-amber-100 px-1">threads-session-state.json</code>{" "}
-              file — paste its full contents below.
+              instead — same result.)
             </p>
           </div>
 

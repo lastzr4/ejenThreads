@@ -231,25 +231,26 @@ account you're comfortable putting at that risk (not your main personal
 account, ideally).
 
 Claude does not perform this login for you — it requires typing your own
-credentials into a real browser window you control. Setup:
+credentials into a real browser window you control, on your own computer.
+Setup:
 
-1. `npx playwright install chromium` (one-time, installs a local browser
-   for the script below — separate from the Docker image Railway uses).
-2. `node scripts/capture-threads-session.mjs` — opens a visible Chromium
-   window at Threads' login page. Log in exactly as you normally would
-   (2FA, verification steps, all handled by you in that window). Once
-   you're on your home feed, return to the terminal and press Enter.
-3. This saves `threads-session-state.json` locally — **treat this file
-   exactly like a password.** It's already gitignored. Base64-encode it:
-   ```powershell
-   [Convert]::ToBase64String([IO.File]::ReadAllBytes("threads-session-state.json"))
-   ```
-4. Paste the output as `THREADS_SESSION_STATE_B64` in Railway → Variables
-   (and `.env.local` if testing locally). Delete the local JSON file once
-   it's safely in Railway.
-5. Redeploy. `lib/threads/scraper.ts` picks it up automatically — no other
-   code changes needed. If it's ever unset or fails to parse, scraping
-   silently falls back to anonymous mode rather than breaking.
+1. Double-click `capture-threads-session.bat` in the project folder (Windows).
+   First run installs dependencies and a local Chromium automatically — this
+   can take a minute. Not on Windows, or prefer the terminal? Run
+   `node scripts/capture-threads-session.mjs` instead (after a one-time
+   `npx playwright install chromium`) — same result.
+2. A visible Chromium window opens at Threads' login page. Log in exactly as
+   you normally would (2FA, verification steps, all handled by you in that
+   window). Once you're on your home feed, go back to that window/terminal
+   and press Enter.
+3. This saves `threads-session-state.json` in the project folder — **treat
+   this file exactly like a password.** It's already gitignored.
+4. Open that file, copy its full contents, and paste them into the app:
+   Dashboard → Settings → Threads session → Save session. Delete the local
+   JSON file once it's saved in the app.
+5. `lib/threads/scraper.ts` picks up the stored session automatically on the
+   next Fetch — no redeploy needed. If it's ever missing or fails to parse,
+   scraping silently falls back to anonymous mode rather than breaking.
 
 Sessions can expire or get revoked by Meta at any time (that's the risk
 described above) — if fetches start returning the anonymous 3-4 post
