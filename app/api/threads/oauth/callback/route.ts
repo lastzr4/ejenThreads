@@ -1,8 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getAppOrigin } from "@/lib/app-url";
 
-function settingsRedirect(request: NextRequest, params: Record<string, string>) {
-  const url = new URL("/dashboard/settings", request.url);
+function settingsRedirect(params: Record<string, string>) {
+  const url = new URL("/dashboard/settings", getAppOrigin());
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value);
   }
@@ -16,10 +17,10 @@ export async function GET(request: NextRequest) {
   const oauthError = searchParams.get("error_description") || searchParams.get("error");
 
   if (oauthError) {
-    return settingsRedirect(request, { error: oauthError });
+    return settingsRedirect({ error: oauthError });
   }
   if (!code || !state) {
-    return settingsRedirect(request, { error: "Missing code/state from Threads redirect" });
+    return settingsRedirect({ error: "Missing code/state from Threads redirect" });
   }
 
   const supabase = createClient();
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest) {
   // screen (see app/api/threads/oauth/start). If the current session
   // doesn't match, refuse rather than attaching a token to the wrong user.
   if (!user || user.id !== state) {
-    return settingsRedirect(request, {
+    return settingsRedirect({
       error: "Session mismatch — please log in and try connecting again"
     });
   }
@@ -41,7 +42,7 @@ export async function GET(request: NextRequest) {
   const redirectUri = process.env.THREADS_REDIRECT_URI;
 
   if (!appId || !appSecret || !redirectUri) {
-    return settingsRedirect(request, {
+    return settingsRedirect({
       error: "THREADS_APP_ID / THREADS_APP_SECRET / THREADS_REDIRECT_URI not configured"
     });
   }
@@ -92,12 +93,12 @@ export async function GET(request: NextRequest) {
     });
 
     if (dbError) {
-      return settingsRedirect(request, { error: dbError.message });
+      return settingsRedirect({ error: dbError.message });
     }
 
-    return settingsRedirect(request, { message: "Threads API connected — auto-posting is ready to configure" });
+    return settingsRedirect({ message: "Threads API connected — auto-posting is ready to configure" });
   } catch (err) {
-    return settingsRedirect(request, {
+    return settingsRedirect({
       error: err instanceof Error ? err.message : "Threads API connection failed"
     });
   }
