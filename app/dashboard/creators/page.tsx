@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { addCreator, deleteCreator } from "./actions";
 import { SubmitButton } from "@/components/submit-button";
+import { LocalDateTime } from "@/components/local-datetime";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -80,9 +81,13 @@ export default async function CreatorsPage({
                     @{creator.username}
                   </Link>
                   <p className="text-xs text-slate-500">
-                    {creator.last_scraped_at
-                      ? `Last scraped ${new Date(creator.last_scraped_at).toLocaleString()}`
-                      : "Not scraped yet"}
+                    {creator.last_scraped_at ? (
+                      <>
+                        Last scraped <LocalDateTime iso={creator.last_scraped_at} />
+                      </>
+                    ) : (
+                      "Not scraped yet"
+                    )}
                     {stats && stats.posts > 0 && (
                       <> · {stats.posts} post{stats.posts === 1 ? "" : "s"} scraped · {stats.replies} replies</>
                     )}

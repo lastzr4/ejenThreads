@@ -4,6 +4,7 @@ import { deleteDraft } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { CopyDraftButton } from "@/components/copy-draft-button";
+import { LocalDateTime } from "@/components/local-datetime";
 
 export default async function DraftsPage({
   searchParams
@@ -57,7 +58,7 @@ export default async function DraftsPage({
                         ·{" "}
                       </>
                     ) : null}
-                    {new Date(draft.created_at).toLocaleString()}
+                    <LocalDateTime iso={draft.created_at} />
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">

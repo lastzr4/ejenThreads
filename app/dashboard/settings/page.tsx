@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { saveThreadsSession, clearThreadsSession, disconnectThreadsApi } from "./actions";
 import { SubmitButton } from "@/components/submit-button";
+import { LocalDateTime } from "@/components/local-datetime";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -46,7 +47,9 @@ export default async function SettingsPage({
           <CardTitle className="text-base">Threads session</CardTitle>
           <CardDescription>
             {connected ? (
-              <>Connected — saved {new Date(settings!.threads_session_updated_at as string).toLocaleString()}.</>
+              <>
+                Connected — saved <LocalDateTime iso={settings!.threads_session_updated_at as string} />.
+              </>
             ) : (
               <>Not connected. Scraping runs anonymously (~3-4 posts per creator per fetch).</>
             )}
@@ -129,7 +132,7 @@ export default async function SettingsPage({
                 Connected — token{" "}
                 {apiTokenExpiresAt ? (
                   <>
-                    valid until {apiTokenExpiresAt.toLocaleString()}
+                    valid until <LocalDateTime iso={settings!.threads_api_token_expires_at as string} />
                     {apiTokenExpiringSoon && " (refreshes automatically soon)"}
                   </>
                 ) : (

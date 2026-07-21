@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { processSchedule } from "@/lib/scheduler/process-schedule";
 
 const ALLOWED_INTERVALS = [1, 2, 4, 6, 12, 24];
 
@@ -81,4 +82,41 @@ export async function deleteSchedule(formData: FormData) {
 
   revalidatePath("/dashboard/schedules");
   redirect("/dashboard/schedules");
+}
+
+/**
+ * Runs one schedule immediately — same generate-then-publish logic the
+ * cron tick uses (lib/scheduler/process-schedule.ts), just triggered on
+ * demand instead of waiting up to an hour+ for the interval. Handy for
+ * testing a schedule right after creating it, without waiting.
+ */
+export async function runScheduleNow(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+
+  const supabase = createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data: schedule } = await supabase
+    .from("posting_schedules")
+    .select("id, user_id, creator_id, interval_hours, post_type, topic")
+    .eq("id", id)
+    .single();
+
+  if (!schedule) {
+    redirect("/dashboard/schedules?error=Schedule%20not%20found");
+  }
+
+  const result = await processSchedule(supabase, schedule);
+
+  revalidatePath("/dashboard/schedules");
+  revalidatePath("/dashboard/drafts");
+  redirect(
+    result.ok
+      ? "/dashboard/schedules?message=" + encodeURIComponent("Ran now — check Drafts for the result")
+      : "/dashboard/schedules?error=" + encodeURIComponent(result.error ?? "Run failed")
+  );
 }

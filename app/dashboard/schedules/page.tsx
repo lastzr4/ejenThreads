@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
-import { createSchedule, toggleSchedule, deleteSchedule } from "./actions";
+import { createSchedule, toggleSchedule, deleteSchedule, runScheduleNow } from "./actions";
 import { SubmitButton } from "@/components/submit-button";
+import { LocalDateTime } from "@/components/local-datetime";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -144,9 +145,12 @@ export default async function SchedulesPage({
                       {schedule.topic ? ` · Topic: ${schedule.topic}` : " · Auto-picked topics"}
                     </span>
                     <span className="block">
-                      Next run: {new Date(schedule.next_run_at).toLocaleString()}
+                      Next run: <LocalDateTime iso={schedule.next_run_at} />
                       {schedule.last_run_at && (
-                        <> · Last run: {new Date(schedule.last_run_at).toLocaleString()}</>
+                        <>
+                          {" "}
+                          · Last run: <LocalDateTime iso={schedule.last_run_at} />
+                        </>
                       )}
                     </span>
                     {schedule.last_result === "error" && schedule.last_error && (
@@ -155,6 +159,12 @@ export default async function SchedulesPage({
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="flex items-center gap-2">
+                  <form action={runScheduleNow}>
+                    <input type="hidden" name="id" value={schedule.id} />
+                    <SubmitButton variant="outline" size="sm" pendingText="Running…">
+                      Run now
+                    </SubmitButton>
+                  </form>
                   <form action={toggleSchedule}>
                     <input type="hidden" name="id" value={schedule.id} />
                     <input type="hidden" name="isActive" value={String(schedule.is_active)} />

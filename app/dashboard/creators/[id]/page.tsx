@@ -5,6 +5,7 @@ import { fetchPostsForCreator } from "../actions";
 import { studyCreator } from "../analyze-actions";
 import { generatePost } from "../generate-actions";
 import { SubmitButton } from "@/components/submit-button";
+import { LocalDateTime } from "@/components/local-datetime";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default async function CreatorDetailPage({
@@ -66,9 +67,13 @@ export default async function CreatorDetailPage({
           </div>
         </div>
         <p className="mt-1 text-sm text-slate-500">
-          {creator.last_scraped_at
-            ? `Last scraped ${new Date(creator.last_scraped_at).toLocaleString()}`
-            : "Not scraped yet — click Fetch recent posts."}
+          {creator.last_scraped_at ? (
+            <>
+              Last scraped <LocalDateTime iso={creator.last_scraped_at} />
+            </>
+          ) : (
+            "Not scraped yet — click Fetch recent posts."
+          )}
           {totalPosts > 0 && (
             <> · {totalPosts} post{totalPosts === 1 ? "" : "s"} scraped · {totalReplies} replies</>
           )}
@@ -83,7 +88,7 @@ export default async function CreatorDetailPage({
             <CardTitle className="text-base">Style analysis</CardTitle>
             <CardDescription>
               Based on {analysis.sample_size} post{analysis.sample_size === 1 ? "" : "s"} ·{" "}
-              {analysis.model_used} · updated {new Date(analysis.updated_at).toLocaleString()}
+              {analysis.model_used} · updated <LocalDateTime iso={analysis.updated_at} />
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
@@ -169,7 +174,9 @@ export default async function CreatorDetailPage({
                   <span>{post.reply_count} replies</span>
                   <span>{post.repost_count} reposts</span>
                   {post.published_at && (
-                    <span>{new Date(post.published_at).toLocaleDateString()}</span>
+                    <span>
+                      <LocalDateTime iso={post.published_at} dateOnly />
+                    </span>
                   )}
                   {post.post_url && (
                     <a
