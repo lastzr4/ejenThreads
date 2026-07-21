@@ -300,19 +300,126 @@ every generated post/thread, newest first, tagged with which creator's
 style it's based on, with **Copy** (clipboard, ready to paste manually)
 and **Delete** actions. No scheduling/auto-posting yet — that's Module 4.
 
+## Module 4: Auto-Posting (Official Threads API + Schedules)
+
+This is the piece that actually posts to your real Threads account, fully
+automated on a timer — e.g. "every 4 hours, write something new in
+@handle's style and publish it." It uses the **official** Meta Threads
+Publishing API (not Playwright/browser automation), which is the
+Meta-sanctioned way to post on your own behalf and carries none of the
+account-ban risk of automating clicks in a browser.
+
+### Why the official API and not the scraping session
+
+The Playwright session connected in Settings ("Threads session") is just
+browser cookies — good enough for reading pages, but automating a real
+*post* action through it would mean scripting UI clicks against your own
+logged-in account from Railway's servers, which Meta can detect and
+penalize, and which isn't how Meta intends third-party posting to happen.
+The official API is a separate, proper OAuth-based integration built
+exactly for this.
+
+### One-time setup: create a Meta Developer App
+
+1. Go to https://developers.facebook.com/apps and create an app (any app
+   type that lets you add use cases works — pick "Other" if asked).
+2. In the app dashboard, add the **Threads** use case (also called "Access
+   the Threads API").
+3. Under **Use cases → Customize → Threads API**, add the
+   `threads_content_publish` permission (`threads_basic` is required and
+   already included).
+4. Under **Settings → Basic**, note your **Threads App ID** and **Threads
+   App secret**.
+5. Still under Settings, add a **Client OAuth Setting → valid OAuth
+   redirect URI**:
+   `https://<your-railway-domain>/api/threads/oauth/callback`
+   (use your actual Railway URL — this must match `THREADS_REDIRECT_URI`
+   exactly, trailing slash and all).
+6. Under **App roles → Roles**, add yourself (and anyone else who'll
+   connect an account) as a **Threads Tester** — required while the app is
+   in Development mode.
+
+**You do not need App Review or Business Verification** for this — those
+are only required to publish on behalf of *other* people's public
+accounts. Posting to your own account (or any account added as a tester)
+works immediately on Standard/Development access.
+
+Set in Railway → Variables (and `.env.local` if testing locally):
+
+```
+THREADS_APP_ID=<from App Dashboard>
+THREADS_APP_SECRET=<from App Dashboard>
+THREADS_REDIRECT_URI=https://<your-railway-domain>/api/threads/oauth/callback
+CRON_SECRET=<any random string>
+```
+
+### Connecting your account
+
+**Dashboard → Settings → Threads API** → click **Connect with Threads**.
+This opens Meta's own authorization screen; approve it, and you're
+redirected back with a long-lived access token (60 days) stored in
+`user_settings`. The token refreshes itself automatically (the scheduler
+checks on every tick and refreshes anything within 5 days of expiring) as
+long as it's used at least once before it fully expires — if it ever does
+fully expire, just click Connect again.
+
+### Setting up a schedule
+
+**Dashboard → Schedules** → pick a creator you've already Studied
+(Module 2), an interval (every 1/2/4/6/12/24 hours), single post or
+thread, and optionally a recurring topic (e.g. an affiliate niche/product
+to keep writing about). Save, and it's live.
+
+### How it actually runs
+
+`server.js` replaces `next start` with a tiny custom server that, once
+listening, also sets a 60-second interval calling its own
+`/api/cron/run-schedules` endpoint (`app/api/cron/run-schedules/route.ts`,
+protected by `CRON_SECRET`). Each tick:
+
+1. Finds every `posting_schedules` row across all users where
+   `is_active = true` and `next_run_at <= now()`.
+2. For each one: makes sure there's a valid Threads API token (refreshing
+   if it's getting close to expiry), generates a new post via the same
+   Claude logic as Module 3 (`lib/generation/generate-styled-post.ts`,
+   shared by both the manual Generate button and this scheduler), then
+   publishes it for real via `lib/threads/publish.ts` — creating a media
+   container, polling until it's processed, then publishing it. Thread
+   posts are chained together via `reply_to_id` so they appear as a single
+   thread from your account.
+3. Records the result in `scheduled_posts` (`status: 'posted'` with the
+   real `threads_post_id`, or `'failed'` with the error) and reschedules
+   `next_run_at` by the configured interval. Errors (token expired, not
+   connected, Threads API rejecting the post) show up on the Schedules
+   page under that schedule, in plain language.
+
+No separate Railway Cron service needed — this all runs inside the one
+existing web service, since it's already a long-running Docker container
+(required for Playwright anyway), not a serverless deployment.
+
+**Caveat:** if this service is ever scaled to more than one replica, each
+replica would run its own copy of this interval and could double-post.
+Fine at Railway's default single-replica setup; worth knowing if that
+changes.
+
+### Limits worth knowing
+
+- Threads caps profiles at 250 published posts per rolling 24 hours —
+  irrelevant at realistic hourly-or-slower intervals, but worth knowing if
+  you ever add multiple aggressive schedules on the same account.
+- Text posts are capped at 500 characters (`generate-styled-post.ts`
+  already asks Claude to stay well under that per post).
+
 ## What's next
 
-Auth, Module 1 (creator tracker + scraper, including optional authenticated
-scraping via Settings), Module 2 (style analyzer), and Module 3 (post
-generator + Drafts) are done.
+Auth, Module 1 (creator tracker + scraper), Module 2 (style analyzer),
+Module 3 (post generator + Drafts), and Module 4 (Official Threads API +
+recurring auto-posting schedules) are all done — this covers the full
+auto-affiliate content loop: study a creator → generate in their style →
+auto-publish on a timer.
 
-- **Module 4**: scheduler UI on top of the existing `scheduled_posts` rows
-  (add a `schedule_time`, flip status draft → scheduled) + a cron-triggered
-  route that calls the Threads Publishing API (`POST
-  /{threads-user-id}/threads` to create a container, then `POST
-  /{threads-user-id}/threads_publish` to publish — official docs:
-  https://developers.facebook.com/docs/threads) to actually post on the
-  creator's behalf. This is the last piece for the auto-affiliate posting
-  workflow CopyCreator is being built toward.
-
-Say the word and we'll start on Module 4.
+Ideas for later, not yet built: engagement-count mapping for scraped posts
+(likes/replies/reposts still read as raw unlabeled numbers in the DOM,
+see Module 1 notes above), per-schedule posting-time windows (e.g. only
+between 9am–9pm) instead of a flat interval, and image/carousel post
+support (currently text-only).

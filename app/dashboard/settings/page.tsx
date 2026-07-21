@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { saveThreadsSession, clearThreadsSession } from "./actions";
+import { saveThreadsSession, clearThreadsSession, disconnectThreadsApi } from "./actions";
 import { SubmitButton } from "@/components/submit-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,11 +16,20 @@ export default async function SettingsPage({
 
   const { data: settings } = await supabase
     .from("user_settings")
-    .select("threads_session_updated_at")
+    .select(
+      "threads_session_updated_at, threads_api_user_id, threads_api_token_expires_at, threads_api_connected_at"
+    )
     .eq("user_id", user?.id ?? "")
     .maybeSingle();
 
   const connected = Boolean(settings?.threads_session_updated_at);
+  const apiConnected = Boolean(settings?.threads_api_user_id);
+  const apiTokenExpiresAt = settings?.threads_api_token_expires_at
+    ? new Date(settings.threads_api_token_expires_at as string)
+    : null;
+  const apiTokenExpiringSoon = apiTokenExpiresAt
+    ? apiTokenExpiresAt.getTime() - Date.now() < 5 * 24 * 60 * 60 * 1000
+    : false;
 
   return (
     <div className="space-y-6">
@@ -108,6 +117,62 @@ export default async function SettingsPage({
 
           {searchParams?.error && <p className="text-sm text-red-600">{searchParams.error}</p>}
           {searchParams?.message && <p className="text-sm text-green-600">{searchParams.message}</p>}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Threads API (auto-posting)</CardTitle>
+          <CardDescription>
+            {apiConnected ? (
+              <>
+                Connected — token{" "}
+                {apiTokenExpiresAt ? (
+                  <>
+                    valid until {apiTokenExpiresAt.toLocaleString()}
+                    {apiTokenExpiringSoon && " (refreshes automatically soon)"}
+                  </>
+                ) : (
+                  "connected"
+                )}
+                .
+              </>
+            ) : (
+              <>Not connected. Schedules (Module 4) can&apos;t publish until this is connected.</>
+            )}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="rounded-md bg-slate-50 border border-slate-200 p-3 text-xs text-slate-700 space-y-1">
+            <p>
+              This is the official Meta Threads API — a separate, sanctioned connection from the
+              scraping session above. It requires a one-time Meta Developer App setup (see README
+              &quot;Module 4&quot;) before this button will work:{" "}
+              <code className="rounded bg-slate-100 px-1">THREADS_APP_ID</code>,{" "}
+              <code className="rounded bg-slate-100 px-1">THREADS_APP_SECRET</code>, and{" "}
+              <code className="rounded bg-slate-100 px-1">THREADS_REDIRECT_URI</code> set in Railway
+              → Variables.
+            </p>
+            <p>
+              As long as you&apos;re only posting to your own account, Meta&apos;s Standard access
+              level is enough — no app review or business verification needed.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <a href="/api/threads/oauth/start">
+              <Button type="button" variant={apiConnected ? "outline" : "default"}>
+                {apiConnected ? "Reconnect" : "Connect with Threads"}
+              </Button>
+            </a>
+            {apiConnected && (
+              <form action={disconnectThreadsApi}>
+                <Button variant="ghost" size="sm" type="submit">
+                  Disconnect
+                </Button>
+              </form>
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>

@@ -70,3 +70,28 @@ export async function clearThreadsSession() {
   revalidatePath("/dashboard/settings");
   redirect("/dashboard/settings?message=Session%20cleared");
 }
+
+export async function disconnectThreadsApi() {
+  const supabase = createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { error } = await supabase
+    .from("user_settings")
+    .update({
+      threads_api_user_id: null,
+      threads_api_access_token: null,
+      threads_api_token_expires_at: null,
+      threads_api_connected_at: null
+    })
+    .eq("user_id", user.id);
+
+  if (error) {
+    redirect(`/dashboard/settings?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/dashboard/settings");
+  redirect("/dashboard/settings?message=Threads%20API%20disconnected");
+}
