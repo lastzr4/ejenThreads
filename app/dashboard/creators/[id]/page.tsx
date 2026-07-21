@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { fetchPostsForCreator } from "../actions";
 import { studyCreator } from "../analyze-actions";
+import { generatePost } from "../generate-actions";
 import { SubmitButton } from "@/components/submit-button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -114,6 +115,45 @@ export default async function CreatorDetailPage({
               <p className="font-medium text-slate-700">Generated style guide</p>
               <p className="text-slate-600 whitespace-pre-wrap">{analysis.generated_rules}</p>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {analysis && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Generate post</CardTitle>
+            <CardDescription>
+              Writes a brand-new post in @{creator.username}&apos;s studied style — not a copy of any
+              real post. Saved as a draft under Drafts.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form action={generatePost} className="space-y-3">
+              <input type="hidden" name="id" value={creator.id} />
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  Topic (optional — e.g. a product, link, or idea to write about)
+                </label>
+                <textarea
+                  name="topic"
+                  rows={2}
+                  placeholder="Leave blank to let it pick a topic that fits this creator's usual themes"
+                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <select
+                  name="postType"
+                  defaultValue="single"
+                  className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
+                >
+                  <option value="single">Single post</option>
+                  <option value="thread">Thread</option>
+                </select>
+                <SubmitButton pendingText="Generating…">Generate post</SubmitButton>
+              </div>
+            </form>
           </CardContent>
         </Card>
       )}

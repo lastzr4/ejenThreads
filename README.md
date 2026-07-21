@@ -276,19 +276,43 @@ rather than asking Claude to format raw JSON — much more reliable.
 Re-running Study overwrites the previous analysis for that creator (one
 row per creator; `sample_size` and `updated_at` tell you how current it is).
 
+## Module 3: AI Post Generator
+
+Live as a **Generate post** card on each creator's detail page (shown once
+that creator has a style analysis). Optionally type a topic — a product,
+link, or idea, for the auto-affiliate use case — or leave it blank and
+Claude picks a topic that fits the creator's usual themes. Choose single
+post or thread, click Generate.
+
+Under the hood (`app/dashboard/creators/generate-actions.ts`): loads the
+creator's `creator_analysis` row (tone, hooks, structure, emoji, CTA,
+vocabulary, `generated_rules`) plus up to 5 of their best-performing real
+posts as rhythm/length reference, and calls Claude with a system prompt
+that explicitly forbids copying sentences verbatim — it's told to write
+brand-new content that only borrows the voice/structure patterns. Output
+is extracted via forced tool-use (`record_generated_post`), same reliable
+pattern as Module 2. The result is saved into `scheduled_posts` with
+`status: 'draft'` (this table already existed in the original schema,
+built for exactly this).
+
+Drafts live at **Dashboard → Drafts** (`app/dashboard/drafts/page.tsx`):
+every generated post/thread, newest first, tagged with which creator's
+style it's based on, with **Copy** (clipboard, ready to paste manually)
+and **Delete** actions. No scheduling/auto-posting yet — that's Module 4.
+
 ## What's next
 
 Auth, Module 1 (creator tracker + scraper, including optional authenticated
-scraping via Settings), and Module 2 (style analyzer) are done.
+scraping via Settings), Module 2 (style analyzer), and Module 3 (post
+generator + Drafts) are done.
 
-- **Module 3**: generation UI using `generated_rules` from `creator_analysis`
-  as system prompt context to draft new single posts / thread chains into
-  `scheduled_posts` as drafts.
-- **Module 4**: scheduler UI + a cron-triggered route that calls the
-  Threads Publishing API (`POST /{threads-user-id}/threads` to create a
-  container, then `POST /{threads-user-id}/threads_publish` to publish —
-  official docs: https://developers.facebook.com/docs/threads) — this is
-  the piece that eventually enables the auto-affiliate posting workflow
-  CopyCreator is being built toward.
+- **Module 4**: scheduler UI on top of the existing `scheduled_posts` rows
+  (add a `schedule_time`, flip status draft → scheduled) + a cron-triggered
+  route that calls the Threads Publishing API (`POST
+  /{threads-user-id}/threads` to create a container, then `POST
+  /{threads-user-id}/threads_publish` to publish — official docs:
+  https://developers.facebook.com/docs/threads) to actually post on the
+  creator's behalf. This is the last piece for the auto-affiliate posting
+  workflow CopyCreator is being built toward.
 
-Say the word and we'll start on Module 3.
+Say the word and we'll start on Module 4.
