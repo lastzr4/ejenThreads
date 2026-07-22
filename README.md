@@ -197,14 +197,19 @@ and be aware an IP or account could get rate-limited.
 ### Current status (confirmed against a live page)
 
 Verified 2026-07-18 against `@ed.puteri`: the scraper successfully pulls
-recent posts (text, URL, published date) into `scraped_threads`. Two known
-limits, both by Threads' own design, not bugs:
+recent posts (text, URL, published date) into `scraped_threads`.
 
-- **Only ~3-4 posts per fetch.** Threads server-renders a small preview for
-  logged-out visitors, then shows "Log in to see more." Re-running **Fetch
-  recent posts** periodically still grows your history over time (new posts
-  get added, already-seen ones just update) — no extra setup needed. See
-  below if you want full history instead.
+**Fixed 2026-07-22:** the scraper used to only read whatever rendered on
+the initial page load — Threads lazy-loads posts via infinite scroll, so
+that capped every fetch at ~5 posts regardless of login state (this looked
+like a login-wall limit but wasn't). `scrollToLoadMore()` in
+`lib/threads/scraper.ts` now scrolls repeatedly before extraction, stopping
+once two scrolls in a row bring in no new posts. Anonymous fetches now
+reliably get more than before (until the real login wall does kick in);
+authenticated fetches (see below) get substantially more still.
+
+One known limit remains, by Threads' own design, not a bug:
+
 - **Engagement counts (likes/replies/reposts) aren't captured yet.** The
   numbers render as bare digits with no accessible label tying a number to
   what it counts, so `scraped_threads.like_count` etc. are currently 0 for
@@ -221,9 +226,10 @@ a page redesign.
 
 ### Getting full post history (optional, has account risk)
 
-By default the scraper is anonymous — no login, no keys, but capped at the
-~3-4 post preview above. You can optionally log it into a real Threads
-account to see everything, at a real cost: **this ties scraping activity to
+By default the scraper is anonymous — no login, no keys, and now scrolls
+for more posts (see above), but Threads' logged-out "log in to see more"
+wall still caps it below full history. You can optionally log it into a
+real Threads account to see everything, at a real cost: **this ties scraping activity to
 that account, run from Railway's servers (a different network than wherever
 you logged in) — Meta can treat that as suspicious and force a re-login,
 a verification challenge, or restrict the account.** Only do this with an
@@ -253,8 +259,8 @@ Setup:
    scraping silently falls back to anonymous mode rather than breaking.
 
 Sessions can expire or get revoked by Meta at any time (that's the risk
-described above) — if fetches start returning the anonymous 3-4 post
-preview again after this was working, the session likely needs recapturing.
+described above) — if fetches start returning far fewer posts again after
+this was working, the session likely needs recapturing.
 
 ## Module 2: AI Style Analyzer
 

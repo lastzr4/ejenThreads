@@ -57,7 +57,7 @@ export default async function CreatorDetailPage({
             <form action={fetchPostsForCreator}>
               <input type="hidden" name="id" value={creator.id} />
               <input type="hidden" name="username" value={creator.username} />
-              <SubmitButton pendingText="Fetching… (10-15s)">Fetch recent posts</SubmitButton>
+              <SubmitButton pendingText="Fetching… (up to 30s, scrolls for more posts)">Fetch recent posts</SubmitButton>
             </form>
             <form action={studyCreator}>
               <input type="hidden" name="id" value={creator.id} />

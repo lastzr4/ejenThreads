@@ -13,7 +13,15 @@
 // guess that found nothing). What actually works: each post has a small
 // byline link back to the author's own profile (href="/@handle"); walking
 // up from that link to the nearest ancestor containing a <time> element
-// gives the real post container. Two strategies, in order:
+// gives the real post container.
+//
+// Second gap found later (2026-07-22): Threads also lazy-loads posts via
+// infinite scroll, so even a real live page only exposes ~5 posts in the
+// initial render regardless of login state — scrollToLoadMore() (below)
+// scrolls repeatedly before extraction runs, which is what actually
+// surfaces more history, separately from whether a session is attached.
+//
+// Two strategies, in order:
 //   1. Look for a server-embedded JSON state blob in a <script> tag — if
 //      found, this is far more reliable than DOM scraping since it's
 //      structured data. Hasn't been confirmed present on Threads yet, but
@@ -234,6 +242,44 @@ async function extractFromDom(page: import("playwright").Page, handle: string): 
   }, handle);
 }
 
+/**
+ * Threads loads posts via infinite scroll — the initial page render only
+ * contains a handful (confirmed: as few as ~5), with more fetched in as
+ * you scroll. Without this, fetchCreatorPosts silently capped out at
+ * whatever rendered first regardless of login state, which looked like a
+ * login-wall limit but wasn't — scroll down repeatedly, counting byline
+ * links after each scroll, and stop once two consecutive scrolls bring in
+ * no new ones (real end of available history, or hit the login wall for
+ * anonymous sessions).
+ */
+async function scrollToLoadMore(page: import("playwright").Page, handle: string, maxScrolls = 12): Promise<void> {
+  const countBylineLinks = () =>
+    page.evaluate((targetHandle: string) => {
+      const hrefSuffix = `/@${targetHandle}`.toLowerCase();
+      return Array.from(document.querySelectorAll("a[href]")).filter((a) => {
+        const href = (a as HTMLAnchorElement).getAttribute("href")?.toLowerCase() ?? "";
+        return href === hrefSuffix || href === hrefSuffix + "/";
+      }).length;
+    }, handle);
+
+  let previousCount = await countBylineLinks();
+  let stableRounds = 0;
+
+  for (let i = 0; i < maxScrolls; i++) {
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await page.waitForTimeout(1500);
+
+    const count = await countBylineLinks();
+    if (count <= previousCount) {
+      stableRounds++;
+      if (stableRounds >= 2) break;
+    } else {
+      stableRounds = 0;
+    }
+    previousCount = count;
+  }
+}
+
 let sharedBrowser: Browser | null = null;
 
 async function getBrowser(): Promise<Browser> {
@@ -304,6 +350,10 @@ export async function fetchCreatorPosts(
     // Give client-side rendering a moment to settle for pages that don't
     // fully resolve on "networkidle".
     await page.waitForTimeout(1500);
+
+    // Scroll to trigger Threads' infinite-load before extracting anything —
+    // otherwise only the first render's handful of posts ever gets seen.
+    await scrollToLoadMore(page, handle);
 
     const embeddedJson = await extractEmbeddedJson(page);
     if (embeddedJson) {
