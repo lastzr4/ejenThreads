@@ -66,7 +66,7 @@ async function createContainer({
   replyToId,
   imageUrl,
   textAttachment
-}: CreateContainerOptions): Promise<string> {
+}: CreateContainerOptions): Promise<{ id: string; usedTextAttachment: boolean }> {
   const buildBody = (includeTextAttachment: boolean) => {
     const body = new URLSearchParams({
       media_type: imageUrl ? "IMAGE" : "TEXT",
@@ -90,19 +90,98 @@ async function createContainer({
     return { ok: res.ok, data };
   };
 
-  let { ok, data } = await attempt(Boolean(textAttachment));
+  let usedTextAttachment = Boolean(textAttachment);
+  let { ok, data } = await attempt(usedTextAttachment);
 
   // If including text_attachment caused the failure (unrecognized param,
   // wrong shape, etc.), retry once without it rather than losing the whole
-  // post over an unconfirmed API detail.
+  // post over an unconfirmed API detail. Confirmed happening in practice
+  // (2026-07-22): Threads accepted the container without text_attachment,
+  // silently dropping the long-form content with no error surfaced to the
+  // caller — publishThreadPosts now uses usedTextAttachment to detect this
+  // and re-post the dropped content as reply/comment chunks instead.
   if (!ok && textAttachment) {
+    usedTextAttachment = false;
     ({ ok, data } = await attempt(false));
   }
 
   if (!ok || !data.id) {
     throw new ThreadsApiError(data?.error?.message || data?.error_message || "Failed to create Threads media container");
   }
-  return data.id as string;
+  return { id: data.id as string, usedTextAttachment };
+}
+
+/**
+ * Splits long text into Threads-post-sized chunks (default ~450 chars,
+ * leaving headroom under the real 500 limit) for the reply-chain fallback
+ * below. Prefers breaking on paragraph, then sentence, then space
+ * boundaries — falls back to a hard cut only if a single "word" alone
+ * exceeds the limit (pathological case, e.g. no spaces at all).
+ */
+function splitIntoChunks(text: string, maxLen = 450): string[] {
+  const paragraphs = text.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  const chunks: string[] = [];
+  let current = "";
+
+  const flush = () => {
+    if (current.trim()) chunks.push(current.trim());
+    current = "";
+  };
+
+  const pushPiece = (piece: string) => {
+    if (!current) {
+      current = piece;
+      return;
+    }
+    const combined = `${current}\n\n${piece}`;
+    if (combined.length <= maxLen) {
+      current = combined;
+    } else {
+      flush();
+      current = piece;
+    }
+  };
+
+  for (const paragraph of paragraphs) {
+    if (paragraph.length <= maxLen) {
+      pushPiece(paragraph);
+      continue;
+    }
+    // Paragraph itself is too long — break on sentences.
+    const sentences = paragraph.match(/[^.!?]+[.!?]*\s*/g) ?? [paragraph];
+    let sentenceChunk = "";
+    for (const sentence of sentences) {
+      const candidate = sentenceChunk ? sentenceChunk + sentence : sentence;
+      if (candidate.length <= maxLen) {
+        sentenceChunk = candidate;
+      } else {
+        if (sentenceChunk.trim()) pushPiece(sentenceChunk.trim());
+        // A single sentence longer than maxLen on its own — hard-wrap on
+        // spaces as a last resort.
+        if (sentence.length > maxLen) {
+          const words = sentence.split(" ");
+          let wordChunk = "";
+          for (const word of words) {
+            const withWord = wordChunk ? `${wordChunk} ${word}` : word;
+            if (withWord.length <= maxLen) {
+              wordChunk = withWord;
+            } else {
+              if (wordChunk) pushPiece(wordChunk);
+              wordChunk = word;
+            }
+          }
+          if (wordChunk) pushPiece(wordChunk);
+          sentenceChunk = "";
+        } else {
+          sentenceChunk = sentence;
+        }
+      }
+    }
+    if (sentenceChunk.trim()) pushPiece(sentenceChunk.trim());
+  }
+  flush();
+
+  return chunks;
 }
 
 /**
@@ -153,10 +232,17 @@ async function publishContainer(threadsUserId: string, accessToken: string, cont
  * individually-typed posts rather than one post with a caption plus extra
  * text-only follow-ups.
  *
- * If textAttachment is given, it's attached to the FIRST post only (the
- * "single post, long-form" case — see generateStyledPost's role/postType
- * handling). Doesn't make sense combined with a multi-post thread, but
- * nothing stops a caller from doing both if they want to.
+ * If textAttachment is given, it's attached to the FIRST post first — but
+ * confirmed in practice (2026-07-22, real publish to @h4niameen4) that
+ * Threads can silently accept the container without actually applying an
+ * unrecognized text_attachment shape, dropping the long-form content with
+ * no error and no reply posts, which is exactly the "no comments, story
+ * lost" bug this was meant to prevent. So whenever createContainer reports
+ * it couldn't apply the attachment, the full textAttachment content gets
+ * split into normal-sized chunks (splitIntoChunks) and posted as ordinary
+ * reply/comment posts right after the first one — the same reliable
+ * reply-chain mechanism a thread already uses, guaranteeing the content
+ * always appears somewhere rather than silently vanishing.
  *
  * Returns the id of the first (root) published post.
  */
@@ -175,19 +261,33 @@ export async function publishThreadPosts(
   let rootId: string | null = null;
 
   for (let i = 0; i < posts.length; i++) {
-    const containerId = await createContainer({
+    const isFirst = i === 0;
+    const { id: containerId, usedTextAttachment } = await createContainer({
       threadsUserId,
       accessToken,
       text: posts[i],
       replyToId: previousPublishedId,
-      imageUrl: i === 0 ? imageUrl ?? undefined : undefined,
-      textAttachment: i === 0 ? textAttachment ?? undefined : undefined
+      imageUrl: isFirst ? imageUrl ?? undefined : undefined,
+      textAttachment: isFirst ? textAttachment ?? undefined : undefined
     });
     await waitForContainerReady(containerId, accessToken);
     const publishedId = await publishContainer(threadsUserId, accessToken, containerId);
 
     if (!rootId) rootId = publishedId;
     previousPublishedId = publishedId;
+
+    if (isFirst && textAttachment && !usedTextAttachment) {
+      for (const chunk of splitIntoChunks(textAttachment)) {
+        const replyContainerId = await createContainer({
+          threadsUserId,
+          accessToken,
+          text: chunk,
+          replyToId: previousPublishedId
+        });
+        await waitForContainerReady(replyContainerId.id, accessToken);
+        previousPublishedId = await publishContainer(threadsUserId, accessToken, replyContainerId.id);
+      }
+    }
   }
 
   return rootId as string;
