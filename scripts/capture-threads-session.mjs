@@ -43,6 +43,22 @@ function waitForEnter(promptText) {
   });
 }
 
+// The one cookie that actually proves you're logged in (not just visiting
+// the login page) is "sessionid" — Threads runs on Instagram's auth system,
+// and this is the cookie that carries it. Everything else (csrftoken,
+// ig_did, mid, etc.) gets set just by loading the login page, logged in or
+// not — so checking for those is not enough and was the root cause of a
+// real bug: a "captured" session with no sessionid still gets saved and
+// pasted into Settings, looks fine (it's valid JSON, has 18 cookies), but
+// the scraper sees it as anonymous and Threads shows only the ~4-post
+// "Log in to see more" preview no matter how much the page is scrolled.
+async function hasSessionCookie(context) {
+  const cookies = await context.cookies();
+  return cookies.some(
+    (c) => c.name === "sessionid" && /threads\.(net|com)|instagram\.com/.test(c.domain)
+  );
+}
+
 async function main() {
   const browser = await chromium.launch({ headless: false });
   const context = await browser.newContext();
@@ -55,12 +71,27 @@ async function main() {
   console.log("(\"Continue with Instagram\" or \"Log in with username instead\" both work.)");
   console.log("Once you're on your Threads home feed, fully logged in, come back here.\n");
 
-  await waitForEnter("Press Enter once you're logged in... ");
+  let loggedIn = false;
+  while (!loggedIn) {
+    await waitForEnter("Press Enter once you're logged in... ");
+
+    loggedIn = await hasSessionCookie(context);
+    if (!loggedIn) {
+      console.log(
+        "\n⚠️  Doesn't look fully logged in yet (no session cookie found). This usually means " +
+          "the login/2FA/checkpoint step wasn't finished, or you're still on the login page."
+      );
+      console.log(
+        "Go back to the Chromium window, make sure you can see your actual Threads home feed " +
+          "(your own posts/following feed, not a login form), then come back here.\n"
+      );
+    }
+  }
 
   const state = await context.storageState();
   writeFileSync(OUTPUT_PATH, JSON.stringify(state, null, 2));
 
-  console.log(`\nSaved session to ${OUTPUT_PATH}.`);
+  console.log(`\n✅ Logged-in session confirmed and saved to ${OUTPUT_PATH}.`);
   console.log("This file is as sensitive as a password — do not commit it, do not share it.");
   console.log("Next step: open the file, copy its full contents, and paste them into");
   console.log("Dashboard -> Settings -> Threads session in the app. Then delete this local file.");

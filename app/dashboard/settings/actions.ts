@@ -37,6 +37,31 @@ export async function saveThreadsSession(formData: FormData) {
     );
   }
 
+  // Deeper check: cookies alone (csrftoken, ig_did, mid, etc.) get set just
+  // by loading the login page — they don't prove you're actually logged in.
+  // The cookie that does is "sessionid" (Threads runs on Instagram's auth).
+  // Without it, this "session" scrapes exactly like an anonymous visitor —
+  // Threads shows ~4 posts then a "Log in to see more" wall, which looked
+  // like a scraper bug but was actually an incomplete login capture. Catch
+  // it here instead of only discovering it several fetches later.
+  const cookies = (parsed as any).cookies as Array<Record<string, unknown>>;
+  const hasSessionId = cookies.some(
+    (c) =>
+      c?.name === "sessionid" &&
+      typeof c?.domain === "string" &&
+      /threads\.(net|com)|instagram\.com/.test(c.domain as string)
+  );
+  if (!hasSessionId) {
+    redirect(
+      "/dashboard/settings?error=" +
+        encodeURIComponent(
+          "This session file has no \"sessionid\" cookie, which means the login wasn't actually completed " +
+            "when it was captured (you'll still see only ~4 posts per creator). Re-run the .bat file, make " +
+            "sure you land on your real Threads home feed before pressing Enter, then paste the new file."
+        )
+    );
+  }
+
   const { error } = await supabase.from("user_settings").upsert({
     user_id: user.id,
     threads_session_state: parsed,
