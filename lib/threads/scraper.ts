@@ -245,14 +245,29 @@ async function extractFromDom(page: import("playwright").Page, handle: string): 
 /**
  * Threads loads posts via infinite scroll — the initial page render only
  * contains a handful (confirmed: as few as ~5), with more fetched in as
- * you scroll. Without this, fetchCreatorPosts silently capped out at
- * whatever rendered first regardless of login state, which looked like a
- * login-wall limit but wasn't — scroll down repeatedly, counting byline
- * links after each scroll, and stop once two consecutive scrolls bring in
- * no new ones (real end of available history, or hit the login wall for
- * anonymous sessions).
+ * you scroll.
+ *
+ * First attempt at this (2026-07-22) used `window.scrollTo()`, which turned
+ * out to do nothing: Threads renders its feed inside a fixed-height,
+ * internally-scrollable child container, not `document.body` — so scrolling
+ * "the window" scrolled nothing, and no new posts ever loaded. Fixed by
+ * using real wheel events (`page.mouse.wheel`) instead, which the browser
+ * routes to whichever scrollable container is actually under the cursor —
+ * the same thing that happens when a real person scrolls with a mouse —
+ * reaching the nested feed container correctly. A keyboard "End" press each
+ * round is a second nudge in case a given layout responds to key
+ * navigation but not wheel events.
+ *
+ * Returns diagnostics (rounds run, final byline-link count) so if a fetch
+ * still comes back thin, `last_fetch_debug` shows whether scrolling ran out
+ * of new posts to load (real history/login-wall limit) vs. not increasing
+ * the count at all (scrolling itself still isn't reaching the feed).
  */
-async function scrollToLoadMore(page: import("playwright").Page, handle: string, maxScrolls = 12): Promise<void> {
+async function scrollToLoadMore(
+  page: import("playwright").Page,
+  handle: string,
+  maxScrolls = 12
+): Promise<{ scrollRounds: number; finalBylineCount: number }> {
   const countBylineLinks = () =>
     page.evaluate((targetHandle: string) => {
       const hrefSuffix = `/@${targetHandle}`.toLowerCase();
@@ -262,11 +277,16 @@ async function scrollToLoadMore(page: import("playwright").Page, handle: string,
       }).length;
     }, handle);
 
+  const viewport = page.viewportSize() ?? { width: 1280, height: 800 };
+  await page.mouse.move(viewport.width / 2, viewport.height / 2);
+
   let previousCount = await countBylineLinks();
   let stableRounds = 0;
+  let round = 0;
 
-  for (let i = 0; i < maxScrolls; i++) {
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  for (; round < maxScrolls; round++) {
+    await page.mouse.wheel(0, 2500);
+    await page.keyboard.press("End").catch(() => {});
     await page.waitForTimeout(1500);
 
     const count = await countBylineLinks();
@@ -278,6 +298,8 @@ async function scrollToLoadMore(page: import("playwright").Page, handle: string,
     }
     previousCount = count;
   }
+
+  return { scrollRounds: round + 1, finalBylineCount: previousCount };
 }
 
 let sharedBrowser: Browser | null = null;
@@ -353,19 +375,25 @@ export async function fetchCreatorPosts(
 
     // Scroll to trigger Threads' infinite-load before extracting anything —
     // otherwise only the first render's handful of posts ever gets seen.
-    await scrollToLoadMore(page, handle);
+    // scrollInfo is folded into whatever gets returned below so it's always
+    // visible in last_fetch_debug/raw_data, not just on total failure —
+    // that's what tells you whether a thin result is a real history/
+    // login-wall limit (finalBylineCount plateaued after several rounds)
+    // or scrolling still isn't reaching the feed (finalBylineCount never
+    // moved past the very first count).
+    const scrollInfo = await scrollToLoadMore(page, handle);
 
     const embeddedJson = await extractEmbeddedJson(page);
     if (embeddedJson) {
       const list = findFirstPostArray(embeddedJson);
       if (list.length > 0) {
-        return { posts: list.map(normalizeThreadsPost), raw: embeddedJson };
+        return { posts: list.map(normalizeThreadsPost), raw: { embeddedJson, scrollInfo } };
       }
     }
 
     const domPosts = await extractFromDom(page, handle);
     if (domPosts.length > 0) {
-      return { posts: domPosts.map(normalizeThreadsPost), raw: domPosts };
+      return { posts: domPosts.map(normalizeThreadsPost), raw: { domPosts, scrollInfo } };
     }
 
     // Nothing found by either strategy. Capture bodyText (cheap sanity
@@ -397,7 +425,7 @@ export async function fetchCreatorPosts(
         samples
       };
     }, handle);
-    return { posts: [], raw: { note: "No posts extracted", ...diagnostic } };
+    return { posts: [], raw: { note: "No posts extracted", scrollInfo, ...diagnostic } };
   } finally {
     await context.close();
   }
