@@ -10,6 +10,26 @@ const GRAPH_BASE = "https://graph.threads.net/v1.0";
 export class ThreadsApiError extends Error {}
 
 /**
+ * Thrown instead of a plain ThreadsApiError when at least the root post
+ * already published successfully before a later post in the chain (a
+ * thread reply, or the long-form comment-chain fallback) failed. Without
+ * this distinction, a partial failure looked identical to a total one —
+ * the caller would mark the whole run "failed" with no record that a real
+ * post already went live on Threads, which is exactly what caused
+ * confusion earlier in this project's development (a live, published post
+ * existed with a real URL, but the app only showed "failed" with no
+ * reference to it).
+ */
+export class ThreadsPartialPublishError extends ThreadsApiError {
+  constructor(
+    message: string,
+    public readonly rootId: string
+  ) {
+    super(message);
+  }
+}
+
+/**
  * Long-lived tokens (60 days) can be refreshed any time they're at least
  * 24h old and not yet expired. Call this proactively (the cron tick does,
  * whenever a token is within REFRESH_MARGIN_MS of expiring) rather than
@@ -260,34 +280,47 @@ export async function publishThreadPosts(
   let previousPublishedId: string | undefined;
   let rootId: string | null = null;
 
-  for (let i = 0; i < posts.length; i++) {
-    const isFirst = i === 0;
-    const { id: containerId, usedTextAttachment } = await createContainer({
-      threadsUserId,
-      accessToken,
-      text: posts[i],
-      replyToId: previousPublishedId,
-      imageUrl: isFirst ? imageUrl ?? undefined : undefined,
-      textAttachment: isFirst ? textAttachment ?? undefined : undefined
-    });
-    await waitForContainerReady(containerId, accessToken);
-    const publishedId = await publishContainer(threadsUserId, accessToken, containerId);
+  try {
+    for (let i = 0; i < posts.length; i++) {
+      const isFirst = i === 0;
+      const { id: containerId, usedTextAttachment } = await createContainer({
+        threadsUserId,
+        accessToken,
+        text: posts[i],
+        replyToId: previousPublishedId,
+        imageUrl: isFirst ? imageUrl ?? undefined : undefined,
+        textAttachment: isFirst ? textAttachment ?? undefined : undefined
+      });
+      await waitForContainerReady(containerId, accessToken);
+      const publishedId = await publishContainer(threadsUserId, accessToken, containerId);
 
-    if (!rootId) rootId = publishedId;
-    previousPublishedId = publishedId;
+      if (!rootId) rootId = publishedId;
+      previousPublishedId = publishedId;
 
-    if (isFirst && textAttachment && !usedTextAttachment) {
-      for (const chunk of splitIntoChunks(textAttachment)) {
-        const replyContainerId = await createContainer({
-          threadsUserId,
-          accessToken,
-          text: chunk,
-          replyToId: previousPublishedId
-        });
-        await waitForContainerReady(replyContainerId.id, accessToken);
-        previousPublishedId = await publishContainer(threadsUserId, accessToken, replyContainerId.id);
+      if (isFirst && textAttachment && !usedTextAttachment) {
+        for (const chunk of splitIntoChunks(textAttachment)) {
+          const replyContainerId = await createContainer({
+            threadsUserId,
+            accessToken,
+            text: chunk,
+            replyToId: previousPublishedId
+          });
+          await waitForContainerReady(replyContainerId.id, accessToken);
+          previousPublishedId = await publishContainer(threadsUserId, accessToken, replyContainerId.id);
+        }
       }
     }
+  } catch (err) {
+    // If the root post already went live before something later in the
+    // chain failed (almost always a reply — see ThreadsPartialPublishError
+    // doc comment), surface that distinctly so the caller can still record
+    // the real post instead of reporting a total failure with no trace of
+    // it.
+    const message = err instanceof Error ? err.message : "Failed to publish Threads thread";
+    if (rootId) {
+      throw new ThreadsPartialPublishError(message, rootId);
+    }
+    throw err;
   }
 
   return rootId as string;

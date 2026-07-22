@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
 import { generateStyledPost } from "@/lib/generation/generate-styled-post";
-import { publishThreadPosts, refreshLongLivedToken } from "@/lib/threads/publish";
+import { publishThreadPosts, refreshLongLivedToken, ThreadsPartialPublishError } from "@/lib/threads/publish";
 
 // Shared by both the cron tick (app/api/cron/run-schedules, iterates every
 // due schedule across every user with the admin client) and the manual
@@ -99,9 +99,12 @@ export async function processSchedule(
         textAttachment
       );
     } catch (publishErr) {
-      // Generated content is real — save it as a failed draft rather than
-      // silently losing it, then re-throw so the schedule itself is marked
-      // errored too.
+      // A ThreadsPartialPublishError means the root post genuinely went
+      // live on Threads before something later in the chain (almost always
+      // a reply) failed — record the real threads_post_id so the draft
+      // links to the actual post instead of looking like nothing happened
+      // at all. Any other error means nothing published.
+      const isPartial = publishErr instanceof ThreadsPartialPublishError;
       await supabase.from("scheduled_posts").insert({
         user_id: schedule.user_id,
         creator_id: schedule.creator_id,
@@ -111,6 +114,7 @@ export async function processSchedule(
         image_url: imageUrl,
         text_attachment: textAttachment,
         status: "failed",
+        threads_post_id: isPartial ? publishErr.rootId : null,
         error_message: publishErr instanceof Error ? publishErr.message : "Publish failed"
       });
       throw publishErr;

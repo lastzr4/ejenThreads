@@ -403,9 +403,16 @@ exactly for this.
    type that lets you add use cases works — pick "Other" if asked).
 2. In the app dashboard, add the **Threads** use case (also called "Access
    the Threads API").
-3. Under **Use cases → Customize → Threads API**, add the
-   `threads_content_publish` permission (`threads_basic` is required and
-   already included).
+3. Under **Use cases → Customize → Threads API**, add both the
+   `threads_content_publish` permission **and** `threads_manage_replies`
+   (`threads_basic` is required and already included). Easy to miss
+   `threads_manage_replies` since a single post publishes fine without it —
+   but it's required for any reply (which is exactly how a Thread, or a
+   long single post that continues as reply/comment posts, gets posted).
+   Without it, Meta returns `"Application does not have permission for
+   this action"` the moment a second (reply) post is attempted — this bit
+   us in development: single posts worked, but every thread failed with
+   that exact error until this permission was added.
 4. Under **Settings → Basic**, note your **Threads App ID** and **Threads
    App secret**.
 5. Still under Settings, add a **Client OAuth Setting → valid OAuth
@@ -421,6 +428,15 @@ exactly for this.
 are only required to publish on behalf of *other* people's public
 accounts. Posting to your own account (or any account added as a tester)
 works immediately on Standard/Development access.
+
+**If you connected Threads API before `threads_manage_replies` existed in
+your app's permission list**: your existing token was only ever granted
+the old, smaller scope — adding the permission in the App Dashboard alone
+isn't enough, since permissions are captured at the moment a user
+authorizes, not re-checked afterward. Go to **Dashboard → Settings →
+Threads API**, click **Disconnect**, then **Connect with Threads** again
+to go through the authorization window once more and get a new token that
+actually includes it.
 
 Set in Railway → Variables (and `.env.local` if testing locally):
 

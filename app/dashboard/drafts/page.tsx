@@ -16,7 +16,7 @@ export default async function DraftsPage({
   const { data: drafts } = await supabase
     .from("scheduled_posts")
     .select(
-      "id, post_type, content_draft, image_url, text_attachment, status, error_message, created_at, creators(username)"
+      "id, post_type, content_draft, image_url, text_attachment, status, error_message, threads_post_id, created_at, creators(username)"
     )
     .order("created_at", { ascending: false });
 
@@ -99,6 +99,12 @@ export default async function DraftsPage({
                       </summary>
                       <p className="mt-2 whitespace-pre-wrap text-slate-600">{draft.text_attachment}</p>
                     </details>
+                  )}
+                  {draft.status === "failed" && draft.threads_post_id && (
+                    <p className="text-sm text-amber-600">
+                      Partially published — the first post went live on Threads (id{" "}
+                      {draft.threads_post_id}), but a later reply/comment in the chain failed.
+                    </p>
                   )}
                   {draft.status === "failed" && draft.error_message && (
                     <p className="text-sm text-red-600">Error: {draft.error_message}</p>

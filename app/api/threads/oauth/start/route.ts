@@ -38,7 +38,17 @@ export async function GET(_request: NextRequest) {
   const authorizeUrl = new URL("https://threads.net/oauth/authorize");
   authorizeUrl.searchParams.set("client_id", appId);
   authorizeUrl.searchParams.set("redirect_uri", redirectUri);
-  authorizeUrl.searchParams.set("scope", "threads_basic,threads_content_publish");
+  // threads_manage_replies is required for any POST to a reply endpoint —
+  // that's exactly what publishing a thread (or the long-form comment-chain
+  // fallback) does via reply_to_id. Without it, Meta returns "Application
+  // does not have permission for this action" the moment a second
+  // (reply) post is attempted — confirmed as the actual root cause behind
+  // every failed multi-post thread in this app so far (single, standalone
+  // posts worked fine since they never call a reply endpoint).
+  authorizeUrl.searchParams.set(
+    "scope",
+    "threads_basic,threads_content_publish,threads_manage_replies"
+  );
   authorizeUrl.searchParams.set("response_type", "code");
   authorizeUrl.searchParams.set("state", user.id);
 
