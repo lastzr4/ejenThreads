@@ -49,6 +49,17 @@ export interface GenerateStyledPostParams {
   postType: "single" | "thread";
   niche?: string | null;
   generateImage?: boolean;
+  /**
+   * Free-text persona/format instruction, e.g. "This account is a
+   * professional writer who publishes short creative fiction (cerpen),
+   * ending with an affiliate product plug." Unlike niche (a topic
+   * category) or topic (a specific subject), this overrides the *shape*
+   * of the post itself — narrative structure, format, framing device —
+   * while the studied creator's tone/voice profile still guides the
+   * actual wording. Optional; when omitted, generation behaves exactly
+   * as before (style profile + niche + topic only).
+   */
+  role?: string | null;
 }
 
 export interface GenerateStyledPostResult {
@@ -74,6 +85,7 @@ export async function generateStyledPost({
   topic,
   postType,
   niche,
+  role,
   generateImage: wantsImage = false
 }: GenerateStyledPostParams): Promise<GenerateStyledPostResult> {
   const { data: creator } = await supabase.from("creators").select("username").eq("id", creatorId).single();
@@ -107,6 +119,17 @@ export async function generateStyledPost({
 
   const nicheDescription = nicheLabel(niche);
   const isAffiliateNiche = niche === "affiliate_product";
+  const hasRole = Boolean(role && role.trim());
+  // A custom Role overrides the generic affiliate hook-line format below —
+  // a role like "professional cerpen writer" defines its own narrative
+  // shape, so forcing the punchy-hook-then-tag-lines template on top of it
+  // would fight the role instead of following it. The product-tag format
+  // (🏷️<name> : <link>) still gets requested separately when links are
+  // present, since that's the affiliate-tracking mechanism itself, not a
+  // stylistic choice.
+  const wantsAffiliateHookFormat =
+    !hasRole && (isAffiliateNiche || /https?:\/\/|\.com|\.my|shopee|tiktok/i.test(topic ?? ""));
+  const hasLinksToTag = isAffiliateNiche || /https?:\/\/|\.com|\.my|shopee|tiktok/i.test(topic ?? "");
 
   const userPrompt =
     `Write a brand-new, original Threads ${postType === "thread" ? "thread (multiple sequential posts)" : "post"} ` +
@@ -120,20 +143,34 @@ export async function generateStyledPost({
     `Vocabulary notes: ${analysis.vocabulary_notes}\n` +
     `Style guide: ${analysis.generated_rules}\n\n` +
     (examplesBlock ? `REAL EXAMPLES (for rhythm/length reference only — do not copy):\n${examplesBlock}\n\n` : "") +
+    (hasRole
+      ? `ROLE / FORMAT INSTRUCTIONS (these take priority over generic formatting — follow them for the ` +
+        `overall shape, narrative structure, and framing of this post; still write in the creator's tone/ ` +
+        `voice from the style profile above):\n${role!.trim()}\n\n` +
+        (postType === "thread"
+          ? `Use as many sequential posts as the story/format genuinely needs — not limited to 2-3 if a ` +
+            `fuller narrative arc calls for more.\n\n`
+          : "")
+      : "") +
     (nicheDescription ? `Niche/category to write within: ${nicheDescription}\n\n` : "") +
     (topic
       ? `Topic to write about: ${topic}\n\n`
       : `No specific topic was given — pick one that fits this creator's usual themes` +
         (nicheDescription ? ` and the niche above` : "") +
         `.\n\n`) +
-    (isAffiliateNiche || /https?:\/\/|\.com|\.my|shopee|tiktok/i.test(topic ?? "")
+    (wantsAffiliateHookFormat
       ? `AFFILIATE POST FORMAT: open with a short, punchy, emotionally relatable hook (1-2 sentences) — ` +
         `Malaysian social-media style often uses an ironic "plot twist" framing (expecting something bad, ` +
         `pleasantly surprised, or vice versa), ending with an emotive emoji if it fits the creator's style. ` +
         `Then, on separate lines, tag every product/link exactly as given in the topic above using the format ` +
         `"🏷️<Product name> : <link>" — one line per product. Never invent, shorten, or alter a link; only ` +
         `reproduce links that were actually given in the topic text.\n\n`
-      : "") +
+      : hasRole && hasLinksToTag
+        ? `Somewhere that fits the role/format above (e.g. near the end, as a natural pivot to a ` +
+          `recommendation), tag every product/link exactly as given in the topic using the format ` +
+          `"🏷️<Product name> : <link>" — one line per product. Never invent, shorten, or alter a link; only ` +
+          `reproduce links that were actually given in the topic text.\n\n`
+        : "") +
     (wantsImage
       ? `An accompanying image was requested — also include image_prompt: a vivid English description of a ` +
         `realistic photo (product shot or lifestyle scene) that fits this post.\n\n`
@@ -142,7 +179,7 @@ export async function generateStyledPost({
 
   const response = await anthropic.messages.create({
     model: ANTHROPIC_MODEL,
-    max_tokens: 1500,
+    max_tokens: hasRole ? 3000 : 1500,
     system:
       "You are a ghostwriter producing brand-new social media posts that emulate a specific creator's " +
       "writing style. You are given a style profile derived from their real posts, and sometimes real " +

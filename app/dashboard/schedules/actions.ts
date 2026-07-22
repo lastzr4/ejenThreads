@@ -13,6 +13,7 @@ export async function createSchedule(formData: FormData) {
   const postType = formData.get("postType") === "thread" ? "thread" : "single";
   const topic = String(formData.get("topic") ?? "").trim();
   const niche = String(formData.get("niche") ?? "").trim();
+  const role = String(formData.get("role") ?? "").trim();
   const generateImage = formData.get("generateImage") === "on";
 
   if (!creatorId || !ALLOWED_INTERVALS.includes(intervalHours)) {
@@ -45,6 +46,7 @@ export async function createSchedule(formData: FormData) {
     post_type: postType,
     topic: topic || null,
     niche: niche || null,
+    role_prompt: role || null,
     generate_image: generateImage,
     next_run_at: new Date().toISOString()
   });
@@ -106,7 +108,7 @@ export async function runScheduleNow(formData: FormData) {
 
   const { data: schedule } = await supabase
     .from("posting_schedules")
-    .select("id, user_id, creator_id, interval_hours, post_type, topic, niche, generate_image")
+    .select("id, user_id, creator_id, interval_hours, post_type, topic, niche, role_prompt, generate_image")
     .eq("id", id)
     .single();
 

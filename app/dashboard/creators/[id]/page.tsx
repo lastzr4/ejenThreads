@@ -175,6 +175,19 @@ export default async function CreatorDetailPage({
                   </select>
                 </div>
               </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  Role / arahan khusus (optional) — overrides the format/structure, e.g. &quot;This account is
+                  a professional short-story (cerpen) writer, ending each story with an affiliate product
+                  plug.&quot;
+                </label>
+                <textarea
+                  name="role"
+                  rows={3}
+                  placeholder="Leave blank to just use this creator's usual post format"
+                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
+                />
+              </div>
               <div className="flex items-center gap-3">
                 <label className="flex items-center gap-2 text-sm text-slate-600">
                   <input type="checkbox" name="generateImage" className="rounded border-slate-300" />

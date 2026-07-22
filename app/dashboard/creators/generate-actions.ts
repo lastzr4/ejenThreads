@@ -10,6 +10,7 @@ export async function generatePost(formData: FormData) {
   const topic = String(formData.get("topic") ?? "").trim();
   const postType = formData.get("postType") === "thread" ? "thread" : "single";
   const niche = String(formData.get("niche") ?? "").trim();
+  const role = String(formData.get("role") ?? "").trim();
   const wantsImage = formData.get("generateImage") === "on";
 
   if (!id) return;
@@ -29,6 +30,7 @@ export async function generatePost(formData: FormData) {
       topic: topic || undefined,
       postType,
       niche: niche || undefined,
+      role: role || undefined,
       generateImage: wantsImage
     });
 

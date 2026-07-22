@@ -314,6 +314,22 @@ vice versa) followed by one `🏷️<Product name> : <link>` line per
 product/link *exactly as given* in the topic — it's instructed to never
 invent or alter a link, only reproduce ones you actually typed in.
 
+**Role (optional free-text field)**: unlike niche (a topic category), Role
+overrides the *shape* of the post itself — narrative structure, framing
+device, persona — while the creator's studied tone/voice still guides the
+actual wording. Example: "This account is a professional writer who
+publishes short creative fiction (cerpen), ending each story with an
+affiliate product plug." When a Role is set, the rigid
+punchy-hook-then-tag-lines affiliate template above is skipped in favor of
+whatever structure the Role describes; product/link tagging
+(`🏷️<Product name> : <link>`) still gets requested if the topic has
+links, just woven in wherever fits the Role's format instead of forced
+into a fixed template. For threads, the Role can ask for as many
+sequential posts as the story needs, not capped at 2-3. Available on both
+the manual Generate form and Schedules (persisted as
+`posting_schedules.role_prompt`, so a recurring schedule keeps using the
+same persona every run).
+
 **AI image generation** (optional, checkbox): calls Google's Gemini image
 model (`gemini-2.5-flash-image`, via `lib/gemini/generate-image.ts`) with an
 image description Claude writes alongside the post text, then uploads the

@@ -20,6 +20,7 @@ export interface ScheduleRow {
   post_type: string;
   topic: string | null;
   niche?: string | null;
+  role_prompt?: string | null;
   generate_image?: boolean | null;
 }
 
@@ -84,6 +85,7 @@ export async function processSchedule(
       topic: schedule.topic ?? undefined,
       postType: schedule.post_type as "single" | "thread",
       niche: schedule.niche,
+      role: schedule.role_prompt,
       generateImage: Boolean(schedule.generate_image)
     });
 
