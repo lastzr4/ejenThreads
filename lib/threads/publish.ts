@@ -41,6 +41,22 @@ interface CreateContainerOptions {
   text: string;
   replyToId?: string;
   imageUrl?: string;
+  /**
+   * Long-form text (up to ~10,000 characters per Meta's September 2025
+   * announcement — see about.fb.com/news/2025/09/attach-text-threads-posts-
+   * share-longer-perspectives) attached to this one post, shown as
+   * expandable "See more" text. Meta's reference docs
+   * (developers.facebook.com/docs/threads/reference/publishing) list a
+   * `text_attachment` parameter of type "object" but don't publicly
+   * document its exact sub-fields at the time this was written — sent here
+   * as a JSON-encoded `{ text: "..." }` object, following the same
+   * convention Graph API uses for its other object-typed params (e.g.
+   * `poll_attachment`) in form-encoded requests. If Meta's actual shape
+   * differs, Threads will reject the container creation call; see the
+   * catch-and-retry-without-it fallback below so a schema mismatch loses
+   * only the long-form attachment, not the whole post.
+   */
+  textAttachment?: string;
 }
 
 async function createContainer({
@@ -48,19 +64,42 @@ async function createContainer({
   accessToken,
   text,
   replyToId,
-  imageUrl
+  imageUrl,
+  textAttachment
 }: CreateContainerOptions): Promise<string> {
-  const body = new URLSearchParams({
-    media_type: imageUrl ? "IMAGE" : "TEXT",
-    text,
-    access_token: accessToken
-  });
-  if (replyToId) body.set("reply_to_id", replyToId);
-  if (imageUrl) body.set("image_url", imageUrl);
+  const buildBody = (includeTextAttachment: boolean) => {
+    const body = new URLSearchParams({
+      media_type: imageUrl ? "IMAGE" : "TEXT",
+      text,
+      access_token: accessToken
+    });
+    if (replyToId) body.set("reply_to_id", replyToId);
+    if (imageUrl) body.set("image_url", imageUrl);
+    if (includeTextAttachment && textAttachment) {
+      body.set("text_attachment", JSON.stringify({ text: textAttachment }));
+    }
+    return body;
+  };
 
-  const res = await fetch(`${GRAPH_BASE}/${threadsUserId}/threads`, { method: "POST", body });
-  const data = await res.json();
-  if (!res.ok || !data.id) {
+  const attempt = async (includeTextAttachment: boolean) => {
+    const res = await fetch(`${GRAPH_BASE}/${threadsUserId}/threads`, {
+      method: "POST",
+      body: buildBody(includeTextAttachment)
+    });
+    const data = await res.json();
+    return { ok: res.ok, data };
+  };
+
+  let { ok, data } = await attempt(Boolean(textAttachment));
+
+  // If including text_attachment caused the failure (unrecognized param,
+  // wrong shape, etc.), retry once without it rather than losing the whole
+  // post over an unconfirmed API detail.
+  if (!ok && textAttachment) {
+    ({ ok, data } = await attempt(false));
+  }
+
+  if (!ok || !data.id) {
     throw new ThreadsApiError(data?.error?.message || data?.error_message || "Failed to create Threads media container");
   }
   return data.id as string;
@@ -114,13 +153,19 @@ async function publishContainer(threadsUserId: string, accessToken: string, cont
  * individually-typed posts rather than one post with a caption plus extra
  * text-only follow-ups.
  *
+ * If textAttachment is given, it's attached to the FIRST post only (the
+ * "single post, long-form" case — see generateStyledPost's role/postType
+ * handling). Doesn't make sense combined with a multi-post thread, but
+ * nothing stops a caller from doing both if they want to.
+ *
  * Returns the id of the first (root) published post.
  */
 export async function publishThreadPosts(
   threadsUserId: string,
   accessToken: string,
   posts: string[],
-  imageUrl?: string | null
+  imageUrl?: string | null,
+  textAttachment?: string | null
 ): Promise<string> {
   if (posts.length === 0) {
     throw new ThreadsApiError("No post text to publish");
@@ -135,7 +180,8 @@ export async function publishThreadPosts(
       accessToken,
       text: posts[i],
       replyToId: previousPublishedId,
-      imageUrl: i === 0 ? imageUrl ?? undefined : undefined
+      imageUrl: i === 0 ? imageUrl ?? undefined : undefined,
+      textAttachment: i === 0 ? textAttachment ?? undefined : undefined
     });
     await waitForContainerReady(containerId, accessToken);
     const publishedId = await publishContainer(threadsUserId, accessToken, containerId);

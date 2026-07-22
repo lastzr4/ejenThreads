@@ -27,7 +27,19 @@ const GENERATE_TOOL = {
         items: { type: "string" },
         description:
           "One or more post texts. A single post is exactly one item. A thread is 2+ items, each " +
-          "meant to be posted as sequential replies to itself — keep each item under ~450 characters."
+          "meant to be posted as sequential replies to itself — keep each item under ~450 characters. " +
+          "Exception: if text_attachment is being used (see below), the single item here should be a " +
+          "short teaser/opening line instead, not the full content."
+      },
+      text_attachment: {
+        type: "string",
+        description:
+          "Only include this for a SINGLE post (not a thread) whose content genuinely doesn't fit " +
+          "Threads' ~500-character post limit — e.g. a full short story/cerpen. When included, Threads " +
+          "shows it as expandable long-form text (up to ~10,000 characters) attached to that one post, " +
+          "so the 'posts' item should be a short, compelling teaser/opening (under ~450 characters) and " +
+          "this field should hold the complete story. Omit entirely if the content comfortably fits in a " +
+          "normal post, or if this is a thread."
       },
       image_prompt: {
         type: "string",
@@ -66,6 +78,14 @@ export interface GenerateStyledPostResult {
   posts: string[];
   creatorUsername: string | null;
   imageUrl: string | null;
+  /**
+   * Long-form body text for a single post that doesn't fit Threads' ~500-
+   * character limit (e.g. a full cerpen/short story) — Threads shows this
+   * as expandable "See more" text on that one post, while `posts[0]` is
+   * just the short teaser. Null unless the format was "single" and the
+   * content genuinely needed it.
+   */
+  textAttachment: string | null;
 }
 
 /**
@@ -150,7 +170,13 @@ export async function generateStyledPost({
         (postType === "thread"
           ? `Use as many sequential posts as the story/format genuinely needs — not limited to 2-3 if a ` +
             `fuller narrative arc calls for more.\n\n`
-          : "")
+          : `This needs to end up as a SINGLE Threads post, not a thread. Threads limits the main visible ` +
+            `text to ~500 characters — if this role/format naturally produces something longer (e.g. a full ` +
+            `short story), do NOT split it into multiple posts. Instead write a short, compelling teaser or ` +
+            `opening line as the single item in "posts" (under ~450 characters), and put the complete text ` +
+            `in text_attachment (up to ~10,000 characters) — Threads shows that as expandable "See more" ` +
+            `text attached to the one post. If the content comfortably fits under ~450 characters on its ` +
+            `own, skip text_attachment and just write the whole thing in "posts".\n\n`)
       : "") +
     (nicheDescription ? `Niche/category to write within: ${nicheDescription}\n\n` : "") +
     (topic
@@ -179,7 +205,11 @@ export async function generateStyledPost({
 
   const response = await anthropic.messages.create({
     model: ANTHROPIC_MODEL,
-    max_tokens: hasRole ? 3000 : 1500,
+    // A role-driven single post can produce up to ~10,000 characters of
+    // text_attachment content (~3000-4000 tokens) plus the surrounding
+    // tool-call JSON — 4096 gives that room without over-provisioning the
+    // common (no role) case.
+    max_tokens: hasRole ? 4096 : 1500,
     system:
       "You are a ghostwriter producing brand-new social media posts that emulate a specific creator's " +
       "writing style. You are given a style profile derived from their real posts, and sometimes real " +
@@ -196,12 +226,25 @@ export async function generateStyledPost({
     throw new Error("Claude did not return a generated post");
   }
 
-  const result = toolUse.input as { topic_used?: string; posts?: string[]; image_prompt?: string };
+  const result = toolUse.input as {
+    topic_used?: string;
+    posts?: string[];
+    text_attachment?: string;
+    image_prompt?: string;
+  };
   const posts = Array.isArray(result.posts) ? result.posts.filter((p) => typeof p === "string" && p.trim()) : [];
 
   if (posts.length === 0) {
     throw new Error("Generated result was empty — try again");
   }
+
+  // Only meaningful for a single post — a thread already spreads long
+  // content across multiple items, so text_attachment (which only attaches
+  // to one post) doesn't apply there.
+  const textAttachment =
+    postType === "single" && typeof result.text_attachment === "string" && result.text_attachment.trim()
+      ? result.text_attachment.trim()
+      : null;
 
   let imageUrl: string | null = null;
   if (wantsImage && result.image_prompt) {
@@ -215,5 +258,5 @@ export async function generateStyledPost({
     }
   }
 
-  return { posts, creatorUsername: creator?.username ?? null, imageUrl };
+  return { posts, creatorUsername: creator?.username ?? null, imageUrl, textAttachment };
 }

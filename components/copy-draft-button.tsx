@@ -7,11 +7,13 @@ import { Button } from "@/components/ui/button";
  * Client component because copying to the clipboard needs an onClick
  * handler — server components (the drafts page) can't attach one directly.
  */
-export function CopyDraftButton({ posts }: { posts: string[] }) {
+export function CopyDraftButton({ posts, textAttachment }: { posts: string[]; textAttachment?: string | null }) {
   const [copied, setCopied] = useState(false);
 
   async function handleCopy() {
-    const text = posts.join("\n\n---\n\n");
+    const text = textAttachment
+      ? [...posts, textAttachment].join("\n\n---\n\n")
+      : posts.join("\n\n---\n\n");
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);

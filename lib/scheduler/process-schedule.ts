@@ -79,7 +79,7 @@ export async function processSchedule(
       }
     }
 
-    const { posts, imageUrl } = await generateStyledPost({
+    const { posts, imageUrl, textAttachment } = await generateStyledPost({
       supabase,
       creatorId: schedule.creator_id,
       topic: schedule.topic ?? undefined,
@@ -91,7 +91,13 @@ export async function processSchedule(
 
     let threadsPostId: string;
     try {
-      threadsPostId = await publishThreadPosts(settings.threads_api_user_id, accessToken, posts, imageUrl);
+      threadsPostId = await publishThreadPosts(
+        settings.threads_api_user_id,
+        accessToken,
+        posts,
+        imageUrl,
+        textAttachment
+      );
     } catch (publishErr) {
       // Generated content is real — save it as a failed draft rather than
       // silently losing it, then re-throw so the schedule itself is marked
@@ -103,6 +109,7 @@ export async function processSchedule(
         post_type: posts.length > 1 ? "thread" : "single",
         content_draft: posts,
         image_url: imageUrl,
+        text_attachment: textAttachment,
         status: "failed",
         error_message: publishErr instanceof Error ? publishErr.message : "Publish failed"
       });
@@ -116,6 +123,7 @@ export async function processSchedule(
       post_type: posts.length > 1 ? "thread" : "single",
       content_draft: posts,
       image_url: imageUrl,
+      text_attachment: textAttachment,
       status: "posted",
       threads_post_id: threadsPostId,
       posted_at: new Date().toISOString()

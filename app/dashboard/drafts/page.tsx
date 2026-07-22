@@ -16,7 +16,7 @@ export default async function DraftsPage({
   const { data: drafts } = await supabase
     .from("scheduled_posts")
     .select(
-      "id, post_type, content_draft, image_url, status, error_message, created_at, creators(username)"
+      "id, post_type, content_draft, image_url, text_attachment, status, error_message, created_at, creators(username)"
     )
     .order("created_at", { ascending: false });
 
@@ -92,11 +92,19 @@ export default async function DraftsPage({
                       </p>
                     ))}
                   </div>
+                  {draft.text_attachment && (
+                    <details className="rounded-md border border-slate-100 bg-slate-50 p-3 text-sm">
+                      <summary className="cursor-pointer font-medium text-slate-700">
+                        Full story (long-form attachment — shown as &quot;See more&quot; on the post)
+                      </summary>
+                      <p className="mt-2 whitespace-pre-wrap text-slate-600">{draft.text_attachment}</p>
+                    </details>
+                  )}
                   {draft.status === "failed" && draft.error_message && (
                     <p className="text-sm text-red-600">Error: {draft.error_message}</p>
                   )}
                   <div className="flex items-center gap-2">
-                    <CopyDraftButton posts={posts} />
+                    <CopyDraftButton posts={posts} textAttachment={draft.text_attachment} />
                     <form action={deleteDraft}>
                       <input type="hidden" name="id" value={draft.id} />
                       <Button variant="ghost" size="sm" type="submit">
