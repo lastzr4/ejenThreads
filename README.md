@@ -330,25 +330,31 @@ the manual Generate form and Schedules (persisted as
 `posting_schedules.role_prompt`, so a recurring schedule keeps using the
 same persona every run).
 
-**Long-form single posts (text attachment)**: Threads caps a normal post at
-~500 characters, so a Role like "cerpen writer" with Format set to
-**Single post** would otherwise have to be split into a thread. Instead,
-when the format is single and the content genuinely needs more room, the
-prompt asks Claude to write a short teaser (the visible post) plus the full
-text separately as a `text_attachment` — Meta added this in September 2025
-as an expandable "See more" attached to one post, up to ~10,000 characters
-(see [Meta's announcement](https://about.fb.com/news/2025/09/attach-text-threads-posts-share-longer-perspectives/)).
-The exact JSON shape of the `text_attachment` API parameter isn't fully
-documented publicly at the time this was built, so `lib/threads/publish.ts`
-sends it as `{ text: "..." }` and, if Threads rejects that shape, silently
-retries the same post without it — you'd get a normal (truncated-to-teaser)
-post rather than a failed publish. The full long-form text is always saved
-alongside the draft (`scheduled_posts.text_attachment`, shown as an
-expandable "Full story" section on the Drafts page) regardless of whether
-the attachment made it onto the actual published post, so nothing is lost
-if that part of the API call doesn't go through as expected. For a Thread
-format, this doesn't apply — the story is expected to be spread across the
-sequential posts instead.
+**Long-form content with a Role, Format = Single post**: Threads caps a
+normal post at ~500 characters. If the content comfortably fits, it's
+written as one post as expected. If a Role (e.g. "cerpen writer") genuinely
+needs more room, rather than cramming or truncating it, generation writes
+it as a natural sequence — the first post stands alone, and each following
+part continues as a reply (comment) on the previous one, exactly the same
+publishing mechanism Thread format uses (`reply_to_id` chaining in
+`lib/threads/publish.ts`). The reader experiences the main post followed by
+its own continuing comment thread. Because this reuses the same
+already-proven reply-chain publishing path (rather than depending on an
+unconfirmed API detail), it's the preferred way to handle overflow content.
+
+There's also a secondary, rarely-needed path: Threads added a
+`text_attachment` parameter in September 2025 — an expandable "See more"
+attached to a single post, up to ~10,000 characters (see
+[Meta's announcement](https://about.fb.com/news/2025/09/attach-text-threads-posts-share-longer-perspectives/)).
+The exact JSON shape isn't fully documented publicly, so `lib/threads/publish.ts`
+sends it as `{ text: "..." }` and silently retries without it if Threads
+rejects the shape — nothing fails outright either way. Claude is told to
+prefer the reply-chain approach above and only reach for text_attachment in
+the rare case it decides a single post with no reply continuation is a
+better fit. Whenever it's used, the full text is also saved on the draft
+(`scheduled_posts.text_attachment`, shown as an expandable "Full story"
+section on the Drafts page) regardless of whether the attachment made it
+onto the actual published post.
 
 **AI image generation** (optional, checkbox): calls Google's Gemini image
 model (`gemini-2.5-flash-image`, via `lib/gemini/generate-image.ts`) with an

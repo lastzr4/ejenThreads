@@ -34,12 +34,10 @@ const GENERATE_TOOL = {
       text_attachment: {
         type: "string",
         description:
-          "Only include this for a SINGLE post (not a thread) whose content genuinely doesn't fit " +
-          "Threads' ~500-character post limit — e.g. a full short story/cerpen. When included, Threads " +
-          "shows it as expandable long-form text (up to ~10,000 characters) attached to that one post, " +
-          "so the 'posts' item should be a short, compelling teaser/opening (under ~450 characters) and " +
-          "this field should hold the complete story. Omit entirely if the content comfortably fits in a " +
-          "normal post, or if this is a thread."
+          "Rarely needed — prefer splitting long content into multiple sequential reply posts instead " +
+          "(see the 'posts' field guidance above), which reads as a normal comment continuation. Only use " +
+          "this instead for a single post with no reply continuation, where you specifically want Threads' " +
+          "expandable long-form 'See more' text attached to just that one post. Omit entirely otherwise."
       },
       image_prompt: {
         type: "string",
@@ -170,13 +168,14 @@ export async function generateStyledPost({
         (postType === "thread"
           ? `Use as many sequential posts as the story/format genuinely needs — not limited to 2-3 if a ` +
             `fuller narrative arc calls for more.\n\n`
-          : `This needs to end up as a SINGLE Threads post, not a thread. Threads limits the main visible ` +
-            `text to ~500 characters — if this role/format naturally produces something longer (e.g. a full ` +
-            `short story), do NOT split it into multiple posts. Instead write a short, compelling teaser or ` +
-            `opening line as the single item in "posts" (under ~450 characters), and put the complete text ` +
-            `in text_attachment (up to ~10,000 characters) — Threads shows that as expandable "See more" ` +
-            `text attached to the one post. If the content comfortably fits under ~450 characters on its ` +
-            `own, skip text_attachment and just write the whole thing in "posts".\n\n`)
+          : `Prefer a SINGLE post if the content comfortably fits under ~450 characters — just write the ` +
+            `whole thing in "posts" as one item. But if this role/format genuinely needs more room (e.g. a ` +
+            `full short story), do NOT cram it into one post or cut it short. Instead write it as a natural ` +
+            `sequence: the first post stands alone, and each following part continues as a reply/comment on ` +
+            `the previous one (same mechanism as a thread) — return each part as its own item in "posts", ` +
+            `each under ~450 characters, in reading order. The reader experiences it as one continuous post ` +
+            `followed by its own comment thread, so keep each part self-contained enough to read naturally ` +
+            `as a continuation rather than a jarring cut.\n\n`)
       : "") +
     (nicheDescription ? `Niche/category to write within: ${nicheDescription}\n\n` : "") +
     (topic
