@@ -279,26 +279,52 @@ row per creator; `sample_size` and `updated_at` tell you how current it is).
 ## Module 3: AI Post Generator
 
 Live as a **Generate post** card on each creator's detail page (shown once
-that creator has a style analysis). Optionally type a topic — a product,
-link, or idea, for the auto-affiliate use case — or leave it blank and
-Claude picks a topic that fits the creator's usual themes. Choose single
-post or thread, click Generate.
+that creator has a style analysis), and as part of creating a Schedule
+(Module 4). Optionally type a topic — a product name + affiliate link, or
+any idea — pick a **niche** preset, choose single post or thread, and
+optionally check **Generate an image too**.
 
-Under the hood (`app/dashboard/creators/generate-actions.ts`): loads the
+Under the hood (`lib/generation/generate-styled-post.ts`, shared by the
+manual Generate button, Schedules, and the cron scheduler): loads the
 creator's `creator_analysis` row (tone, hooks, structure, emoji, CTA,
 vocabulary, `generated_rules`) plus up to 5 of their best-performing real
 posts as rhythm/length reference, and calls Claude with a system prompt
 that explicitly forbids copying sentences verbatim — it's told to write
 brand-new content that only borrows the voice/structure patterns. Output
 is extracted via forced tool-use (`record_generated_post`), same reliable
-pattern as Module 2. The result is saved into `scheduled_posts` with
-`status: 'draft'` (this table already existed in the original schema,
-built for exactly this).
+pattern as Module 2.
+
+**Niche presets** (`lib/niches.ts`): AI/Technology, Relationship, Finance,
+Beauty/Fashion, Food, Health/Fitness, or Affiliate/Product — steers topic
+selection toward themes that tend to get more engagement, independent of
+whose writing style is being reused. Pick "No preset" to let Claude choose
+freely based on the creator's usual themes instead.
+
+**Affiliate hook format**: when the niche is Affiliate/Product (or the
+topic looks like it contains a product/link), the prompt asks for a short,
+punchy, emotionally relatable hook line (the common Malaysian-social-media
+"plot twist" framing — expecting something bad, pleasantly surprised, or
+vice versa) followed by one `🏷️<Product name> : <link>` line per
+product/link *exactly as given* in the topic — it's instructed to never
+invent or alter a link, only reproduce ones you actually typed in.
+
+**AI image generation** (optional, checkbox): calls OpenAI's `gpt-image-1`
+(`lib/openai/generate-image.ts`) with an image description Claude writes
+alongside the post text, then uploads the result to a public Supabase
+Storage bucket (`generated-images`, auto-created by migration 0005) via
+`lib/storage/upload-image.ts` — the Threads API needs a public URL to fetch
+the image from when publishing. Requires `OPENAI_API_KEY`. If image
+generation fails for any reason, the post text still saves fine — you just
+won't get an image on that one.
+
+The result is saved into `scheduled_posts` with `status: 'draft'` (manual
+Generate) or `'posted'`/`'failed'` (Schedules/cron — see Module 4).
 
 Drafts live at **Dashboard → Drafts** (`app/dashboard/drafts/page.tsx`):
-every generated post/thread, newest first, tagged with which creator's
-style it's based on, with **Copy** (clipboard, ready to paste manually)
-and **Delete** actions. No scheduling/auto-posting yet — that's Module 4.
+every generated post/thread, newest first, with its image if it has one,
+tagged with which creator's style it's based on and its status (draft /
+posted / failed, with the error shown for failed ones), plus **Copy**
+(clipboard) and **Delete** actions.
 
 ## Module 4: Auto-Posting (Official Threads API + Schedules)
 
@@ -366,9 +392,12 @@ fully expire, just click Connect again.
 ### Setting up a schedule
 
 **Dashboard → Schedules** → pick a creator you've already Studied
-(Module 2), an interval (every 1/2/4/6/12/24 hours), single post or
-thread, and optionally a recurring topic (e.g. an affiliate niche/product
-to keep writing about). Save, and it's live.
+(Module 2), an interval (every 1/2/4/6/12/24 hours), a niche preset,
+single post or thread, optionally a recurring topic (e.g. a product name +
+affiliate link to keep tagging), and optionally **Generate an image every
+run too**. Save, and it's live. There's also a **Run now** button on each
+schedule card — runs it immediately instead of waiting for the interval,
+handy for testing right after creating one.
 
 ### How it actually runs
 

@@ -12,6 +12,8 @@ export async function createSchedule(formData: FormData) {
   const intervalHours = Number(formData.get("intervalHours"));
   const postType = formData.get("postType") === "thread" ? "thread" : "single";
   const topic = String(formData.get("topic") ?? "").trim();
+  const niche = String(formData.get("niche") ?? "").trim();
+  const generateImage = formData.get("generateImage") === "on";
 
   if (!creatorId || !ALLOWED_INTERVALS.includes(intervalHours)) {
     redirect("/dashboard/schedules?error=Pick+a+creator+and+a+valid+interval");
@@ -42,6 +44,8 @@ export async function createSchedule(formData: FormData) {
     interval_hours: intervalHours,
     post_type: postType,
     topic: topic || null,
+    niche: niche || null,
+    generate_image: generateImage,
     next_run_at: new Date().toISOString()
   });
 
@@ -102,7 +106,7 @@ export async function runScheduleNow(formData: FormData) {
 
   const { data: schedule } = await supabase
     .from("posting_schedules")
-    .select("id, user_id, creator_id, interval_hours, post_type, topic")
+    .select("id, user_id, creator_id, interval_hours, post_type, topic, niche, generate_image")
     .eq("id", id)
     .single();
 

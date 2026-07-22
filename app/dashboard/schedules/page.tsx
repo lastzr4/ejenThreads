@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createSchedule, toggleSchedule, deleteSchedule, runScheduleNow } from "./actions";
 import { SubmitButton } from "@/components/submit-button";
 import { LocalDateTime } from "@/components/local-datetime";
+import { NICHE_OPTIONS, nicheLabel } from "@/lib/niches";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -30,7 +31,7 @@ export default async function SchedulesPage({
   const { data: schedules } = await supabase
     .from("posting_schedules")
     .select(
-      "id, creator_id, interval_hours, post_type, topic, is_active, next_run_at, last_run_at, last_result, last_error, creators(username)"
+      "id, creator_id, interval_hours, post_type, topic, niche, generate_image, is_active, next_run_at, last_run_at, last_result, last_error, creators(username)"
     )
     .order("created_at", { ascending: false });
 
@@ -93,7 +94,7 @@ export default async function SchedulesPage({
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-600">
-                  Recurring topic (optional — e.g. an affiliate niche/product to keep writing about)
+                  Recurring topic (optional — e.g. a product name + affiliate link to keep tagging)
                 </label>
                 <input
                   type="text"
@@ -102,15 +103,38 @@ export default async function SchedulesPage({
                   className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
                 />
               </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Niche (optional)</label>
+                  <select
+                    name="niche"
+                    defaultValue=""
+                    className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
+                  >
+                    {NICHE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Format</label>
+                  <select
+                    name="postType"
+                    defaultValue="single"
+                    className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
+                  >
+                    <option value="single">Single post</option>
+                    <option value="thread">Thread</option>
+                  </select>
+                </div>
+              </div>
               <div className="flex items-center gap-3">
-                <select
-                  name="postType"
-                  defaultValue="single"
-                  className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
-                >
-                  <option value="single">Single post</option>
-                  <option value="thread">Thread</option>
-                </select>
+                <label className="flex items-center gap-2 text-sm text-slate-600">
+                  <input type="checkbox" name="generateImage" className="rounded border-slate-300" />
+                  Generate an image every run too (AI, via OpenAI)
+                </label>
                 <SubmitButton pendingText="Creating…">Create schedule</SubmitButton>
               </div>
             </form>
@@ -143,6 +167,8 @@ export default async function SchedulesPage({
                     <span className="block">
                       {schedule.post_type === "thread" ? "Thread" : "Single post"}
                       {schedule.topic ? ` · Topic: ${schedule.topic}` : " · Auto-picked topics"}
+                      {nicheLabel(schedule.niche) && ` · Niche: ${nicheLabel(schedule.niche)}`}
+                      {schedule.generate_image && " · + AI image"}
                     </span>
                     <span className="block">
                       Next run: <LocalDateTime iso={schedule.next_run_at} />

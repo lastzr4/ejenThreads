@@ -9,6 +9,8 @@ export async function generatePost(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const topic = String(formData.get("topic") ?? "").trim();
   const postType = formData.get("postType") === "thread" ? "thread" : "single";
+  const niche = String(formData.get("niche") ?? "").trim();
+  const wantsImage = formData.get("generateImage") === "on";
 
   if (!id) return;
 
@@ -21,13 +23,21 @@ export async function generatePost(formData: FormData) {
   let errorMessage: string | null = null;
 
   try {
-    const { posts } = await generateStyledPost({ supabase, creatorId: id, topic: topic || undefined, postType });
+    const { posts, imageUrl } = await generateStyledPost({
+      supabase,
+      creatorId: id,
+      topic: topic || undefined,
+      postType,
+      niche: niche || undefined,
+      generateImage: wantsImage
+    });
 
     const { error: insertError } = await supabase.from("scheduled_posts").insert({
       user_id: user.id,
       creator_id: id,
       post_type: posts.length > 1 ? "thread" : "single",
       content_draft: posts,
+      image_url: imageUrl,
       status: "draft"
     });
 

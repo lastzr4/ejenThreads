@@ -6,6 +6,7 @@ import { studyCreator } from "../analyze-actions";
 import { generatePost } from "../generate-actions";
 import { SubmitButton } from "@/components/submit-button";
 import { LocalDateTime } from "@/components/local-datetime";
+import { NICHE_OPTIONS } from "@/lib/niches";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default async function CreatorDetailPage({
@@ -147,16 +148,39 @@ export default async function CreatorDetailPage({
                   className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
                 />
               </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Niche (optional)</label>
+                  <select
+                    name="niche"
+                    defaultValue=""
+                    className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
+                  >
+                    {NICHE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Format</label>
+                  <select
+                    name="postType"
+                    defaultValue="single"
+                    className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
+                  >
+                    <option value="single">Single post</option>
+                    <option value="thread">Thread</option>
+                  </select>
+                </div>
+              </div>
               <div className="flex items-center gap-3">
-                <select
-                  name="postType"
-                  defaultValue="single"
-                  className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
-                >
-                  <option value="single">Single post</option>
-                  <option value="thread">Thread</option>
-                </select>
-                <SubmitButton pendingText="Generating…">Generate post</SubmitButton>
+                <label className="flex items-center gap-2 text-sm text-slate-600">
+                  <input type="checkbox" name="generateImage" className="rounded border-slate-300" />
+                  Generate an image too (AI, via OpenAI)
+                </label>
+                <SubmitButton pendingText="Generating… (image can take ~15s)">Generate post</SubmitButton>
               </div>
             </form>
           </CardContent>

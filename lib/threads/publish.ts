@@ -40,15 +40,23 @@ interface CreateContainerOptions {
   accessToken: string;
   text: string;
   replyToId?: string;
+  imageUrl?: string;
 }
 
-async function createContainer({ threadsUserId, accessToken, text, replyToId }: CreateContainerOptions): Promise<string> {
+async function createContainer({
+  threadsUserId,
+  accessToken,
+  text,
+  replyToId,
+  imageUrl
+}: CreateContainerOptions): Promise<string> {
   const body = new URLSearchParams({
-    media_type: "TEXT",
+    media_type: imageUrl ? "IMAGE" : "TEXT",
     text,
     access_token: accessToken
   });
   if (replyToId) body.set("reply_to_id", replyToId);
+  if (imageUrl) body.set("image_url", imageUrl);
 
   const res = await fetch(`${GRAPH_BASE}/${threadsUserId}/threads`, { method: "POST", body });
   const data = await res.json();
@@ -100,12 +108,19 @@ async function publishContainer(threadsUserId: string, accessToken: string, cont
  * one's published id (reply_to_id) — this is how Threads represents a
  * multi-post "thread" from the same author.
  *
+ * If imageUrl is given, only the FIRST post is published as an IMAGE
+ * container (with that post's text as the caption) — any following thread
+ * replies stay plain TEXT, since Threads represents a thread as a chain of
+ * individually-typed posts rather than one post with a caption plus extra
+ * text-only follow-ups.
+ *
  * Returns the id of the first (root) published post.
  */
 export async function publishThreadPosts(
   threadsUserId: string,
   accessToken: string,
-  posts: string[]
+  posts: string[],
+  imageUrl?: string | null
 ): Promise<string> {
   if (posts.length === 0) {
     throw new ThreadsApiError("No post text to publish");
@@ -114,12 +129,13 @@ export async function publishThreadPosts(
   let previousPublishedId: string | undefined;
   let rootId: string | null = null;
 
-  for (const text of posts) {
+  for (let i = 0; i < posts.length; i++) {
     const containerId = await createContainer({
       threadsUserId,
       accessToken,
-      text,
-      replyToId: previousPublishedId
+      text: posts[i],
+      replyToId: previousPublishedId,
+      imageUrl: i === 0 ? imageUrl ?? undefined : undefined
     });
     await waitForContainerReady(containerId, accessToken);
     const publishedId = await publishContainer(threadsUserId, accessToken, containerId);

@@ -15,7 +15,9 @@ export default async function DraftsPage({
 
   const { data: drafts } = await supabase
     .from("scheduled_posts")
-    .select("id, post_type, content_draft, status, created_at, creators(username)")
+    .select(
+      "id, post_type, content_draft, image_url, status, error_message, created_at, creators(username)"
+    )
     .order("created_at", { ascending: false });
 
   return (
@@ -23,9 +25,9 @@ export default async function DraftsPage({
       <div>
         <h1 className="text-xl font-semibold">Drafts</h1>
         <p className="mt-1 text-sm text-slate-500">
-          AI-generated posts, written in a studied creator&apos;s style. Review, copy, or discard —
-          scheduling/auto-posting (Module 4) isn&apos;t wired up yet, so these are ready to paste
-          manually for now.
+          Every post CopyCreator has generated — manual (Generate post button) and automatic
+          (Schedules). <strong>draft</strong> is unpublished (copy it manually), <strong>posted</strong>{" "}
+          went out live via the Threads API, <strong>failed</strong> means publishing hit an error.
         </p>
         {searchParams?.error && <p className="mt-2 text-sm text-red-600">{searchParams.error}</p>}
         {searchParams?.message && <p className="mt-2 text-sm text-green-600">{searchParams.message}</p>}
@@ -36,6 +38,12 @@ export default async function DraftsPage({
           drafts.map((draft) => {
             const posts = Array.isArray(draft.content_draft) ? (draft.content_draft as string[]) : [];
             const creatorUsername = (draft.creators as unknown as { username: string } | null)?.username;
+            const statusStyles: Record<string, string> = {
+              draft: "bg-slate-100 text-slate-600",
+              posted: "bg-green-100 text-green-700",
+              failed: "bg-red-100 text-red-700",
+              scheduled: "bg-blue-100 text-blue-700"
+            };
 
             return (
               <Card key={draft.id}>
@@ -44,7 +52,11 @@ export default async function DraftsPage({
                     <CardTitle className="text-base">
                       {draft.post_type === "thread" ? `Thread (${posts.length} posts)` : "Single post"}
                     </CardTitle>
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs ${
+                        statusStyles[draft.status] ?? "bg-slate-100 text-slate-600"
+                      }`}
+                    >
                       {draft.status}
                     </span>
                   </div>
@@ -62,6 +74,14 @@ export default async function DraftsPage({
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
+                  {draft.image_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={draft.image_url}
+                      alt="AI-generated"
+                      className="max-h-64 w-full rounded-md border border-slate-100 object-cover"
+                    />
+                  )}
                   <div className="space-y-2">
                     {posts.map((text, i) => (
                       <p
@@ -72,6 +92,9 @@ export default async function DraftsPage({
                       </p>
                     ))}
                   </div>
+                  {draft.status === "failed" && draft.error_message && (
+                    <p className="text-sm text-red-600">Error: {draft.error_message}</p>
+                  )}
                   <div className="flex items-center gap-2">
                     <CopyDraftButton posts={posts} />
                     <form action={deleteDraft}>

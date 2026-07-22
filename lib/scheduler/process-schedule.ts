@@ -19,6 +19,8 @@ export interface ScheduleRow {
   interval_hours: number;
   post_type: string;
   topic: string | null;
+  niche?: string | null;
+  generate_image?: boolean | null;
 }
 
 export interface ProcessScheduleResult {
@@ -76,16 +78,18 @@ export async function processSchedule(
       }
     }
 
-    const { posts } = await generateStyledPost({
+    const { posts, imageUrl } = await generateStyledPost({
       supabase,
       creatorId: schedule.creator_id,
       topic: schedule.topic ?? undefined,
-      postType: schedule.post_type as "single" | "thread"
+      postType: schedule.post_type as "single" | "thread",
+      niche: schedule.niche,
+      generateImage: Boolean(schedule.generate_image)
     });
 
     let threadsPostId: string;
     try {
-      threadsPostId = await publishThreadPosts(settings.threads_api_user_id, accessToken, posts);
+      threadsPostId = await publishThreadPosts(settings.threads_api_user_id, accessToken, posts, imageUrl);
     } catch (publishErr) {
       // Generated content is real — save it as a failed draft rather than
       // silently losing it, then re-throw so the schedule itself is marked
@@ -96,6 +100,7 @@ export async function processSchedule(
         posting_schedule_id: schedule.id,
         post_type: posts.length > 1 ? "thread" : "single",
         content_draft: posts,
+        image_url: imageUrl,
         status: "failed",
         error_message: publishErr instanceof Error ? publishErr.message : "Publish failed"
       });
@@ -108,6 +113,7 @@ export async function processSchedule(
       posting_schedule_id: schedule.id,
       post_type: posts.length > 1 ? "thread" : "single",
       content_draft: posts,
+      image_url: imageUrl,
       status: "posted",
       threads_post_id: threadsPostId,
       posted_at: new Date().toISOString()
