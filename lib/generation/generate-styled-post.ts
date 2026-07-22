@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
 import { getAnthropicClient, ANTHROPIC_MODEL } from "@/lib/anthropic/client";
 import { nicheLabel } from "@/lib/niches";
-import { generateImage } from "@/lib/openai/generate-image";
+import { generateImage } from "@/lib/gemini/generate-image";
 import { uploadGeneratedImage } from "@/lib/storage/upload-image";
 
 // Shared by both the manual "Generate post" button

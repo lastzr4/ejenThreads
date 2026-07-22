@@ -178,7 +178,7 @@ export default async function CreatorDetailPage({
               <div className="flex items-center gap-3">
                 <label className="flex items-center gap-2 text-sm text-slate-600">
                   <input type="checkbox" name="generateImage" className="rounded border-slate-300" />
-                  Generate an image too (AI, via OpenAI)
+                  Generate an image too (AI, via Gemini — free)
                 </label>
                 <SubmitButton pendingText="Generating… (image can take ~15s)">Generate post</SubmitButton>
               </div>

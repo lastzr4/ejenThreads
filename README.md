@@ -308,13 +308,17 @@ vice versa) followed by one `🏷️<Product name> : <link>` line per
 product/link *exactly as given* in the topic — it's instructed to never
 invent or alter a link, only reproduce ones you actually typed in.
 
-**AI image generation** (optional, checkbox): calls OpenAI's `gpt-image-1`
-(`lib/openai/generate-image.ts`) with an image description Claude writes
-alongside the post text, then uploads the result to a public Supabase
-Storage bucket (`generated-images`, auto-created by migration 0005) via
-`lib/storage/upload-image.ts` — the Threads API needs a public URL to fetch
-the image from when publishing. Requires `OPENAI_API_KEY`. If image
-generation fails for any reason, the post text still saves fine — you just
+**AI image generation** (optional, checkbox): calls Google's Gemini image
+model (`gemini-2.5-flash-image`, via `lib/gemini/generate-image.ts`) with an
+image description Claude writes alongside the post text, then uploads the
+result to a public Supabase Storage bucket (`generated-images`,
+auto-created by migration 0005) via `lib/storage/upload-image.ts` — the
+Threads API needs a public URL to fetch the image from when publishing.
+Requires `GEMINI_API_KEY` — free, get one at aistudio.google.com/apikey, no
+card required (Google's free tier is currently ~500 images/day; that's
+Google's to change, so check current limits there if you hit a quota
+error). If image generation fails for any reason, the post text still
+saves fine — you just
 won't get an image on that one.
 
 The result is saved into `scheduled_posts` with `status: 'draft'` (manual

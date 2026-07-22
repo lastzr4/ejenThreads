@@ -133,7 +133,7 @@ export default async function SchedulesPage({
               <div className="flex items-center gap-3">
                 <label className="flex items-center gap-2 text-sm text-slate-600">
                   <input type="checkbox" name="generateImage" className="rounded border-slate-300" />
-                  Generate an image every run too (AI, via OpenAI)
+                  Generate an image every run too (AI, via Gemini — free)
                 </label>
                 <SubmitButton pendingText="Creating…">Create schedule</SubmitButton>
               </div>

@@ -1,13 +1,17 @@
-// AI image generation for Module 3 posts, using OpenAI's gpt-image-1.
-// Kept as a plain fetch call (like lib/threads/publish.ts) rather than
-// pulling in the openai npm package, to match this codebase's existing
-// lightweight-fetch style for external APIs.
+// UNUSED — kept only as a reference implementation.
 //
-// gpt-image-1 always returns base64-encoded image bytes (no url option,
-// unlike dall-e-2/3) — which actually suits us better here: we upload the
-// bytes straight to Supabase Storage ourselves (lib/storage/upload-image.ts)
-// rather than depending on a temporary OpenAI-hosted URL that expires
-// before the Threads API gets a chance to fetch it.
+// CopyCreator's Module 3 image generation now uses Google Gemini instead
+// (see lib/gemini/generate-image.ts), because Gemini's free tier
+// (~500 images/day at no cost, no card required — aistudio.google.com/apikey)
+// comfortably covers this app's needs, whereas OpenAI's gpt-image-1 has no
+// free tier at all. Nothing in the app imports this file anymore.
+//
+// If you'd rather use OpenAI (e.g. you already have billing set up there,
+// or want gpt-image-1's quality/style for a specific case), this is a
+// working implementation you can point lib/generation/generate-styled-post.ts
+// back at — swap its `import { generateImage } from "@/lib/gemini/generate-image"`
+// for `from "@/lib/openai/generate-image"` and set OPENAI_API_KEY instead
+// of GEMINI_API_KEY. Same function signature either way.
 
 export class ImageGenerationError extends Error {}
 
