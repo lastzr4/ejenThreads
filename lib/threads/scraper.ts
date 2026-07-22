@@ -258,16 +258,34 @@ async function extractFromDom(page: import("playwright").Page, handle: string): 
  * round is a second nudge in case a given layout responds to key
  * navigation but not wheel events.
  *
- * Returns diagnostics (rounds run, final byline-link count) so if a fetch
- * still comes back thin, `last_fetch_debug` shows whether scrolling ran out
- * of new posts to load (real history/login-wall limit) vs. not increasing
- * the count at all (scrolling itself still isn't reaching the feed).
+ * Second gap found later the same day (confirmed against @erynngojess,
+ * 2026-07-22 20:xx): scrolling itself started working fine — 32 distinct
+ * posts got saved — but only the newest ~7 had any content_text; the other
+ * 25 had real, distinct URLs/timestamps but blank text. Root cause: this
+ * function used to only call extractFromDom() ONCE, after all scrolling
+ * finished. Threads virtualizes its feed for performance — once a post
+ * scrolls far enough past the viewport, its DOM node can get recycled/
+ * emptied out even though the node (and its byline link) is still present.
+ * By the time a single extraction ran at the very end, most of the posts
+ * that had been scrolled past already had their text wiped, while only the
+ * last few (still near the viewport) were still fully populated. Fixed by
+ * extracting after *every* scroll round (and once before scrolling starts,
+ * for the initial SSR posts) and merging into an accumulator keyed by post
+ * URL, keeping the longest non-empty text seen for each — so a post's text
+ * is captured while its node is still fully rendered, before virtualization
+ * has a chance to strip it.
+ *
+ * Returns both the accumulated posts and diagnostics (rounds run, final
+ * byline-link count) so if a fetch still comes back thin, `last_fetch_debug`
+ * shows whether scrolling ran out of new posts to load (real history/
+ * login-wall limit) vs. not increasing the count at all (scrolling itself
+ * still isn't reaching the feed).
  */
-async function scrollToLoadMore(
+async function scrapeWithScroll(
   page: import("playwright").Page,
   handle: string,
   maxScrolls = 12
-): Promise<{ scrollRounds: number; finalBylineCount: number }> {
+): Promise<{ posts: Record<string, any>[]; scrollRounds: number; finalBylineCount: number }> {
   const countBylineLinks = () =>
     page.evaluate((targetHandle: string) => {
       const hrefSuffix = `/@${targetHandle}`.toLowerCase();
@@ -276,6 +294,24 @@ async function scrollToLoadMore(
         return href === hrefSuffix || href === hrefSuffix + "/";
       }).length;
     }, handle);
+
+  const merged = new Map<string, Record<string, any>>();
+  const mergeIn = (posts: Record<string, any>[]) => {
+    for (const p of posts) {
+      const key = (p.url as string | null) || (p.text as string | null);
+      if (!key) continue;
+      const existing = merged.get(key);
+      const newLen = typeof p.text === "string" ? p.text.length : 0;
+      const existingLen = existing && typeof existing.text === "string" ? existing.text.length : -1;
+      if (!existing || newLen > existingLen) {
+        merged.set(key, p);
+      }
+    }
+  };
+
+  // Capture whatever the initial (pre-scroll) render already has — these
+  // are the SSR'd posts and are fully populated from the start.
+  mergeIn(await extractFromDom(page, handle));
 
   const viewport = page.viewportSize() ?? { width: 1280, height: 800 };
   await page.mouse.move(viewport.width / 2, viewport.height / 2);
@@ -289,6 +325,10 @@ async function scrollToLoadMore(
     await page.keyboard.press("End").catch(() => {});
     await page.waitForTimeout(1500);
 
+    // Extract now, before whatever just scrolled past gets virtualized —
+    // this is what actually fixed posts coming back with blank text.
+    mergeIn(await extractFromDom(page, handle));
+
     const count = await countBylineLinks();
     if (count <= previousCount) {
       stableRounds++;
@@ -299,7 +339,7 @@ async function scrollToLoadMore(
     previousCount = count;
   }
 
-  return { scrollRounds: round + 1, finalBylineCount: previousCount };
+  return { posts: Array.from(merged.values()), scrollRounds: round + 1, finalBylineCount: previousCount };
 }
 
 let sharedBrowser: Browser | null = null;
@@ -373,27 +413,31 @@ export async function fetchCreatorPosts(
     // fully resolve on "networkidle".
     await page.waitForTimeout(1500);
 
-    // Scroll to trigger Threads' infinite-load before extracting anything —
-    // otherwise only the first render's handful of posts ever gets seen.
-    // scrollInfo is folded into whatever gets returned below so it's always
-    // visible in last_fetch_debug/raw_data, not just on total failure —
-    // that's what tells you whether a thin result is a real history/
-    // login-wall limit (finalBylineCount plateaued after several rounds)
-    // or scrolling still isn't reaching the feed (finalBylineCount never
-    // moved past the very first count).
-    const scrollInfo = await scrollToLoadMore(page, handle);
-
+    // Check for a server-embedded JSON blob first — cheap, and if present
+    // it's more reliable than DOM scraping. In practice this hasn't matched
+    // on Threads profile pages seen so far, so the real path below (scroll
+    // + incremental DOM extraction) is what actually runs.
     const embeddedJson = await extractEmbeddedJson(page);
     if (embeddedJson) {
       const list = findFirstPostArray(embeddedJson);
       if (list.length > 0) {
-        return { posts: list.map(normalizeThreadsPost), raw: { embeddedJson, scrollInfo } };
+        return { posts: list.map(normalizeThreadsPost), raw: { embeddedJson } };
       }
     }
 
-    const domPosts = await extractFromDom(page, handle);
+    // Scroll to trigger Threads' infinite-load, extracting after every
+    // round rather than once at the end — see scrapeWithScroll's doc
+    // comment for why (virtualization empties out post text for anything
+    // scrolled past before a single end-of-scroll extraction would see it).
+    // scrollRounds/finalBylineCount are folded into the return value below
+    // so they're always visible in last_fetch_debug/raw_data, not just on
+    // total failure — that's what tells you whether a thin result is a real
+    // history/login-wall limit (finalBylineCount plateaued after several
+    // rounds) or scrolling still isn't reaching the feed (finalBylineCount
+    // never moved past the very first count).
+    const { posts: domPosts, scrollRounds, finalBylineCount } = await scrapeWithScroll(page, handle);
     if (domPosts.length > 0) {
-      return { posts: domPosts.map(normalizeThreadsPost), raw: { domPosts, scrollInfo } };
+      return { posts: domPosts.map(normalizeThreadsPost), raw: { domPosts, scrollInfo: { scrollRounds, finalBylineCount } } };
     }
 
     // Nothing found by either strategy. Capture bodyText (cheap sanity
@@ -425,7 +469,10 @@ export async function fetchCreatorPosts(
         samples
       };
     }, handle);
-    return { posts: [], raw: { note: "No posts extracted", scrollInfo, ...diagnostic } };
+    return {
+      posts: [],
+      raw: { note: "No posts extracted", scrollInfo: { scrollRounds, finalBylineCount }, ...diagnostic }
+    };
   } finally {
     await context.close();
   }

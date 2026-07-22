@@ -15,26 +15,15 @@ echo Do NOT close this window until it says "Saved session to ...".
 echo.
 
 where node >nul 2>nul
-if errorlevel 1 (
-  echo.
-  echo Node.js was not found. Install it from https://nodejs.org and run this again.
-  echo.
-  pause
-  exit /b 1
-)
+if errorlevel 1 goto :nonode
 
-if not exist node_modules (
-  echo Installing dependencies (first run only)...
-  call npm install
-  if errorlevel 1 (
-    echo.
-    echo npm install failed. Check the messages above.
-    pause
-    exit /b 1
-  )
-)
+if exist node_modules goto :afterinstall
+echo Installing dependencies - first run only...
+call npm install
+if errorlevel 1 goto :installfailed
 
-echo Making sure the local Chromium browser is installed (first run only)...
+:afterinstall
+echo Making sure the local Chromium browser is installed - first run only...
 call npx playwright install chromium
 
 echo.
@@ -54,3 +43,17 @@ echo Once it's saved in the app, you can delete threads-session-state.json
 echo from this folder - it is as sensitive as a password.
 echo.
 pause
+goto :eof
+
+:nonode
+echo.
+echo Node.js was not found. Install it from https://nodejs.org and run this again.
+echo.
+pause
+exit /b 1
+
+:installfailed
+echo.
+echo npm install failed. Check the messages above.
+pause
+exit /b 1
