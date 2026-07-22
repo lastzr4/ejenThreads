@@ -16,7 +16,7 @@ export default async function DraftsPage({
   const { data: drafts } = await supabase
     .from("scheduled_posts")
     .select(
-      "id, post_type, content_draft, image_url, text_attachment, status, error_message, threads_post_id, created_at, creators(username)"
+      "id, post_type, content_draft, image_url, image_error, text_attachment, status, error_message, threads_post_id, created_at, creators(username)"
     )
     .order("created_at", { ascending: false });
 
@@ -81,6 +81,9 @@ export default async function DraftsPage({
                       alt="AI-generated"
                       className="max-h-64 w-full rounded-md border border-slate-100 object-cover"
                     />
+                  )}
+                  {draft.image_error && (
+                    <p className="text-sm text-amber-600">Image generation failed: {draft.image_error}</p>
                   )}
                   <div className="space-y-2">
                     {posts.map((text, i) => (

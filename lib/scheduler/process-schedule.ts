@@ -79,7 +79,7 @@ export async function processSchedule(
       }
     }
 
-    const { posts, imageUrl, textAttachment } = await generateStyledPost({
+    const { posts, imageUrl, imageError, textAttachment } = await generateStyledPost({
       supabase,
       creatorId: schedule.creator_id,
       topic: schedule.topic ?? undefined,
@@ -112,6 +112,7 @@ export async function processSchedule(
         post_type: posts.length > 1 ? "thread" : "single",
         content_draft: posts,
         image_url: imageUrl,
+        image_error: imageError,
         text_attachment: textAttachment,
         status: "failed",
         threads_post_id: isPartial ? publishErr.rootId : null,
@@ -127,6 +128,7 @@ export async function processSchedule(
       post_type: posts.length > 1 ? "thread" : "single",
       content_draft: posts,
       image_url: imageUrl,
+      image_error: imageError,
       text_attachment: textAttachment,
       status: "posted",
       threads_post_id: threadsPostId,

@@ -77,6 +77,14 @@ export interface GenerateStyledPostResult {
   creatorUsername: string | null;
   imageUrl: string | null;
   /**
+   * Set whenever an image was requested but generation/upload failed —
+   * previously this was silently discarded (caught, imageUrl left null, no
+   * trace anywhere), which made "the image just never shows up" impossible
+   * to diagnose without direct server log access. Null when no image was
+   * requested, or when it succeeded.
+   */
+  imageError: string | null;
+  /**
    * Long-form body text for a single post that doesn't fit Threads' ~500-
    * character limit (e.g. a full cerpen/short story) — Threads shows this
    * as expandable "See more" text on that one post, while `posts[0]` is
@@ -246,16 +254,26 @@ export async function generateStyledPost({
       : null;
 
   let imageUrl: string | null = null;
-  if (wantsImage && result.image_prompt) {
-    try {
-      const { buffer, contentType } = await generateImage(result.image_prompt);
-      imageUrl = await uploadGeneratedImage(buffer, contentType);
-    } catch {
-      // Non-fatal — the text is still good on its own. Caller/UI just
-      // won't have an image for this one.
-      imageUrl = null;
+  let imageError: string | null = null;
+  if (wantsImage) {
+    if (!result.image_prompt) {
+      // Shouldn't normally happen since wantsImage adds an instruction to
+      // include image_prompt, but Claude can still omit it.
+      imageError = "Image was requested but Claude didn't return an image_prompt to generate from";
+    } else {
+      try {
+        const { buffer, contentType } = await generateImage(result.image_prompt);
+        imageUrl = await uploadGeneratedImage(buffer, contentType);
+      } catch (err) {
+        // Non-fatal to the whole generation — the text is still good on
+        // its own — but no longer silent: logged server-side and surfaced
+        // to the caller so it shows up on the draft instead of just
+        // vanishing with zero trace.
+        imageError = err instanceof Error ? err.message : "Image generation failed";
+        console.error("[generateStyledPost] image generation/upload failed:", err);
+      }
     }
   }
 
-  return { posts, creatorUsername: creator?.username ?? null, imageUrl, textAttachment };
+  return { posts, creatorUsername: creator?.username ?? null, imageUrl, imageError, textAttachment };
 }

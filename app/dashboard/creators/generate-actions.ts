@@ -24,7 +24,7 @@ export async function generatePost(formData: FormData) {
   let errorMessage: string | null = null;
 
   try {
-    const { posts, imageUrl, textAttachment } = await generateStyledPost({
+    const { posts, imageUrl, imageError, textAttachment } = await generateStyledPost({
       supabase,
       creatorId: id,
       topic: topic || undefined,
@@ -40,6 +40,7 @@ export async function generatePost(formData: FormData) {
       post_type: posts.length > 1 ? "thread" : "single",
       content_draft: posts,
       image_url: imageUrl,
+      image_error: imageError,
       text_attachment: textAttachment,
       status: "draft"
     });
