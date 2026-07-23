@@ -15,6 +15,10 @@ export async function createSchedule(formData: FormData) {
   const niche = String(formData.get("niche") ?? "").trim();
   const role = String(formData.get("role") ?? "").trim();
   const generateImage = formData.get("generateImage") === "on";
+  // Default is "require approval" (checkbox checked) unless the user
+  // explicitly unchecks it — a plain <input type="checkbox"> only appears
+  // in formData at all when checked, so absence means "off" here.
+  const requireApproval = formData.get("requireApproval") === "on";
 
   if (!creatorId || !ALLOWED_INTERVALS.includes(intervalHours)) {
     redirect("/dashboard/schedules?error=Pick+a+creator+and+a+valid+interval");
@@ -48,6 +52,7 @@ export async function createSchedule(formData: FormData) {
     niche: niche || null,
     role_prompt: role || null,
     generate_image: generateImage,
+    require_approval: requireApproval,
     next_run_at: new Date().toISOString()
   });
 
@@ -108,7 +113,9 @@ export async function runScheduleNow(formData: FormData) {
 
   const { data: schedule } = await supabase
     .from("posting_schedules")
-    .select("id, user_id, creator_id, interval_hours, post_type, topic, niche, role_prompt, generate_image")
+    .select(
+      "id, user_id, creator_id, interval_hours, post_type, topic, niche, role_prompt, generate_image, require_approval"
+    )
     .eq("id", id)
     .single();
 

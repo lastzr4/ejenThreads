@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { deleteDraft } from "./actions";
+import { deleteDraft, approveAndPublishDraft } from "./actions";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/submit-button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { CopyDraftButton } from "@/components/copy-draft-button";
 import { LocalDateTime } from "@/components/local-datetime";
@@ -26,8 +27,10 @@ export default async function DraftsPage({
         <h1 className="text-xl font-semibold">Drafts</h1>
         <p className="mt-1 text-sm text-slate-500">
           Every post CopyCreator has generated — manual (Generate post button) and automatic
-          (Schedules). <strong>draft</strong> is unpublished (copy it manually), <strong>posted</strong>{" "}
-          went out live via the Threads API, <strong>failed</strong> means publishing hit an error.
+          (Schedules). <strong>draft</strong>/<strong>pending review</strong> are unpublished — review
+          them and click <strong>Publish to Threads</strong> when you&apos;re happy with it (or Copy to
+          post manually yourself). <strong>posted</strong> went out live via the Threads API,{" "}
+          <strong>failed</strong> means publishing hit an error.
         </p>
         {searchParams?.error && <p className="mt-2 text-sm text-red-600">{searchParams.error}</p>}
         {searchParams?.message && <p className="mt-2 text-sm text-green-600">{searchParams.message}</p>}
@@ -40,10 +43,15 @@ export default async function DraftsPage({
             const creatorUsername = (draft.creators as unknown as { username: string } | null)?.username;
             const statusStyles: Record<string, string> = {
               draft: "bg-slate-100 text-slate-600",
+              pending_review: "bg-amber-100 text-amber-700",
               posted: "bg-green-100 text-green-700",
               failed: "bg-red-100 text-red-700",
               scheduled: "bg-blue-100 text-blue-700"
             };
+            const statusLabels: Record<string, string> = {
+              pending_review: "pending review"
+            };
+            const canPublish = draft.status === "draft" || draft.status === "pending_review";
 
             return (
               <Card key={draft.id}>
@@ -57,7 +65,7 @@ export default async function DraftsPage({
                         statusStyles[draft.status] ?? "bg-slate-100 text-slate-600"
                       }`}
                     >
-                      {draft.status}
+                      {statusLabels[draft.status] ?? draft.status}
                     </span>
                   </div>
                   <CardDescription>
@@ -113,6 +121,14 @@ export default async function DraftsPage({
                     <p className="text-sm text-red-600">Error: {draft.error_message}</p>
                   )}
                   <div className="flex items-center gap-2">
+                    {canPublish && (
+                      <form action={approveAndPublishDraft}>
+                        <input type="hidden" name="id" value={draft.id} />
+                        <SubmitButton size="sm" pendingText="Publishing…">
+                          Publish to Threads
+                        </SubmitButton>
+                      </form>
+                    )}
                     <CopyDraftButton posts={posts} textAttachment={draft.text_attachment} />
                     <form action={deleteDraft}>
                       <input type="hidden" name="id" value={draft.id} />

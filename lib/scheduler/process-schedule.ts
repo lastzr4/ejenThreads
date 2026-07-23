@@ -1,7 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
 import { generateStyledPost } from "@/lib/generation/generate-styled-post";
-import { publishThreadPosts, refreshLongLivedToken, ThreadsPartialPublishError } from "@/lib/threads/publish";
+import { publishThreadPosts, ThreadsPartialPublishError } from "@/lib/threads/publish";
+import { getValidThreadsAccessToken } from "@/lib/scheduler/get-threads-token";
 
 // Shared by both the cron tick (app/api/cron/run-schedules, iterates every
 // due schedule across every user with the admin client) and the manual
@@ -9,8 +10,6 @@ import { publishThreadPosts, refreshLongLivedToken, ThreadsPartialPublishError }
 // user's own session-scoped client) — same generate-then-publish logic
 // either way, just reused from two different callers/clients so it only
 // lives in one place.
-
-const REFRESH_MARGIN_MS = 5 * 24 * 60 * 60 * 1000; // refresh if <5 days from expiring
 
 export interface ScheduleRow {
   id: string;
@@ -22,6 +21,17 @@ export interface ScheduleRow {
   niche?: string | null;
   role_prompt?: string | null;
   generate_image?: boolean | null;
+  /**
+   * When true (the default), a run only generates content and queues it
+   * as a "pending_review" draft — nothing gets published until the user
+   * approves it from the Drafts page (approveAndPublishDraft in
+   * app/dashboard/drafts/actions.ts). When false, this behaves like the
+   * original Module 4 design: generate and publish immediately, no review
+   * step. Added after repeated real publish failures (permission errors,
+   * content silently dropped) made "review before it goes out" something
+   * worth having by default rather than fully trusting an unattended run.
+   */
+  require_approval?: boolean | null;
 }
 
 export interface ProcessScheduleResult {
@@ -30,9 +40,12 @@ export interface ProcessScheduleResult {
 }
 
 /**
- * Generates a new styled post and publishes it via the Threads API for one
- * schedule, then records the result and reschedules next_run_at — success
- * or failure either way (never throws; check the return value).
+ * Generates a new styled post for one schedule. If the schedule requires
+ * approval (the default), saves it as a "pending_review" draft and stops
+ * there — no Threads API call happens until the user approves it. If not,
+ * publishes immediately via the Threads API, same as the original design.
+ * Either way, records the result and reschedules next_run_at — success or
+ * failure either way (never throws; check the return value).
  */
 export async function processSchedule(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -40,45 +53,9 @@ export async function processSchedule(
   schedule: ScheduleRow
 ): Promise<ProcessScheduleResult> {
   const nextRunAt = new Date(Date.now() + schedule.interval_hours * 60 * 60 * 1000).toISOString();
+  const requiresApproval = schedule.require_approval !== false;
 
   try {
-    const { data: settings } = await supabase
-      .from("user_settings")
-      .select("threads_api_user_id, threads_api_access_token, threads_api_token_expires_at")
-      .eq("user_id", schedule.user_id)
-      .maybeSingle();
-
-    if (!settings?.threads_api_user_id || !settings?.threads_api_access_token) {
-      throw new Error("Threads API not connected — connect it in Settings");
-    }
-
-    let accessToken = settings.threads_api_access_token;
-    const expiresAt = settings.threads_api_token_expires_at
-      ? new Date(settings.threads_api_token_expires_at).getTime()
-      : 0;
-
-    if (expiresAt && expiresAt < Date.now()) {
-      throw new Error("Threads API token has expired — reconnect it in Settings");
-    }
-
-    if (expiresAt && expiresAt - Date.now() < REFRESH_MARGIN_MS) {
-      try {
-        const refreshed = await refreshLongLivedToken(accessToken);
-        accessToken = refreshed.accessToken;
-        await supabase
-          .from("user_settings")
-          .update({
-            threads_api_access_token: refreshed.accessToken,
-            threads_api_token_expires_at: refreshed.expiresAt
-          })
-          .eq("user_id", schedule.user_id);
-      } catch {
-        // Refresh failing isn't fatal on its own as long as the current
-        // token hasn't actually expired yet — proceed with it this run
-        // and try refreshing again next time.
-      }
-    }
-
     const { posts, imageUrl, imageError, textAttachment } = await generateStyledPost({
       supabase,
       creatorId: schedule.creator_id,
@@ -89,15 +66,40 @@ export async function processSchedule(
       generateImage: Boolean(schedule.generate_image)
     });
 
+    if (requiresApproval) {
+      const { error: insertError } = await supabase.from("scheduled_posts").insert({
+        user_id: schedule.user_id,
+        creator_id: schedule.creator_id,
+        posting_schedule_id: schedule.id,
+        post_type: posts.length > 1 ? "thread" : "single",
+        content_draft: posts,
+        image_url: imageUrl,
+        image_error: imageError,
+        text_attachment: textAttachment,
+        status: "pending_review"
+      });
+      if (insertError) throw new Error(insertError.message);
+
+      await supabase
+        .from("posting_schedules")
+        .update({
+          last_run_at: new Date().toISOString(),
+          next_run_at: nextRunAt,
+          last_result: "success",
+          last_error: null
+        })
+        .eq("id", schedule.id);
+
+      return { ok: true };
+    }
+
+    // require_approval === false: publish immediately, same as the
+    // original Module 4 behavior.
+    const { threadsUserId, accessToken } = await getValidThreadsAccessToken(supabase, schedule.user_id);
+
     let threadsPostId: string;
     try {
-      threadsPostId = await publishThreadPosts(
-        settings.threads_api_user_id,
-        accessToken,
-        posts,
-        imageUrl,
-        textAttachment
-      );
+      threadsPostId = await publishThreadPosts(threadsUserId, accessToken, posts, imageUrl, textAttachment);
     } catch (publishErr) {
       // A ThreadsPartialPublishError means the root post genuinely went
       // live on Threads before something later in the chain (almost always

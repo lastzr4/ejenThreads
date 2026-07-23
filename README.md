@@ -462,10 +462,35 @@ fully expire, just click Connect again.
 **Dashboard → Schedules** → pick a creator you've already Studied
 (Module 2), an interval (every 1/2/4/6/12/24 hours), a niche preset,
 single post or thread, optionally a recurring topic (e.g. a product name +
-affiliate link to keep tagging), and optionally **Generate an image every
-run too**. Save, and it's live. There's also a **Run now** button on each
-schedule card — runs it immediately instead of waiting for the interval,
-handy for testing right after creating one.
+affiliate link to keep tagging), a Role (see Module 3), optionally
+**Generate an image every run too**, and **Require my approval before
+posting** (checked by default). Save, and it's live. There's also a **Run
+now** button on each schedule card — runs it immediately instead of
+waiting for the interval, handy for testing right after creating one.
+
+### Review before posting (default) vs. fully automatic
+
+By default, a schedule run only *generates* content — it lands on the
+**Drafts** page with status **pending review** and nothing gets published
+yet. Look it over, then click **Publish to Threads** when you're happy
+with it (or **Delete** to discard it and let the next scheduled run try
+again). This exists because generation and publishing are two separably
+useful things: the earlier design auto-published every run unattended,
+which meant any bad generation (or a publish-side bug) went out live with
+no chance to catch it first — several real issues surfaced exactly that
+way during development.
+
+Untick **Require my approval before posting** on a schedule to skip the
+review step entirely — it publishes immediately every run, same as the
+original design. This is a per-schedule setting
+(`posting_schedules.require_approval`), so some schedules can be
+fully hands-off while others stay review-gated.
+
+The manual **Generate post** button (Module 3) always lands as a
+**draft** — its content never auto-publishes either. The same **Publish
+to Threads** button appears on any draft (whether it came from the manual
+button or a review-gated schedule) — it's the same one action either way,
+`approveAndPublishDraft` in `app/dashboard/drafts/actions.ts`.
 
 ### How it actually runs
 
@@ -476,19 +501,24 @@ protected by `CRON_SECRET`). Each tick:
 
 1. Finds every `posting_schedules` row across all users where
    `is_active = true` and `next_run_at <= now()`.
-2. For each one: makes sure there's a valid Threads API token (refreshing
-   if it's getting close to expiry), generates a new post via the same
-   Claude logic as Module 3 (`lib/generation/generate-styled-post.ts`,
-   shared by both the manual Generate button and this scheduler), then
+2. For each one: generates a new post via the same Claude logic as
+   Module 3 (`lib/generation/generate-styled-post.ts`, shared by the
+   manual Generate button, schedules, and the cron tick).
+3. If the schedule requires approval (default): saves it to
+   `scheduled_posts` with `status: 'pending_review'` and stops there — no
+   Threads API call happens yet. If not: makes sure there's a valid
+   Threads API token (refreshing if it's getting close to expiry) and
    publishes it for real via `lib/threads/publish.ts` — creating a media
    container, polling until it's processed, then publishing it. Thread
-   posts are chained together via `reply_to_id` so they appear as a single
-   thread from your account.
-3. Records the result in `scheduled_posts` (`status: 'posted'` with the
-   real `threads_post_id`, or `'failed'` with the error) and reschedules
-   `next_run_at` by the configured interval. Errors (token expired, not
-   connected, Threads API rejecting the post) show up on the Schedules
-   page under that schedule, in plain language.
+   posts (and the long-form comment-chain fallback) are chained together
+   via `reply_to_id` so they appear as a single thread from your account.
+4. Records the result in `scheduled_posts` (`'pending_review'`,
+   `'posted'` with the real `threads_post_id`, or `'failed'` with the
+   error) and reschedules `next_run_at` by the configured interval either
+   way — review status doesn't pause the interval, so drafts can pile up
+   on the Drafts page if they're not reviewed regularly. Errors (token
+   expired, not connected, Threads API rejecting the post) show up on the
+   Schedules page under that schedule, in plain language.
 
 No separate Railway Cron service needed — this all runs inside the one
 existing web service, since it's already a long-running Docker container

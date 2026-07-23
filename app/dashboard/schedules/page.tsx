@@ -31,7 +31,7 @@ export default async function SchedulesPage({
   const { data: schedules } = await supabase
     .from("posting_schedules")
     .select(
-      "id, creator_id, interval_hours, post_type, topic, niche, role_prompt, generate_image, is_active, next_run_at, last_run_at, last_result, last_error, creators(username)"
+      "id, creator_id, interval_hours, post_type, topic, niche, role_prompt, generate_image, require_approval, is_active, next_run_at, last_run_at, last_result, last_error, creators(username)"
     )
     .order("created_at", { ascending: false });
 
@@ -40,9 +40,9 @@ export default async function SchedulesPage({
       <div>
         <h1 className="text-xl font-semibold">Schedules</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Fully automated: every interval, generates a new post in the chosen creator&apos;s style and
-          publishes it straight to your Threads account via the official API. Requires the Threads API
-          connected in Settings.
+          Every interval, generates a new post in the chosen creator&apos;s style. By default it waits for
+          your approval on the Drafts page before posting — untick &quot;Require my approval&quot; below to
+          publish straight to Threads with no review step. Requires the Threads API connected in Settings.
         </p>
         {searchParams?.error && <p className="mt-2 text-sm text-red-600">{searchParams.error}</p>}
         {searchParams?.message && <p className="mt-2 text-sm text-green-600">{searchParams.message}</p>}
@@ -143,13 +143,22 @@ export default async function SchedulesPage({
                   className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
                 />
               </div>
-              <div className="flex items-center gap-3">
+              <div className="space-y-2">
                 <label className="flex items-center gap-2 text-sm text-slate-600">
                   <input type="checkbox" name="generateImage" className="rounded border-slate-300" />
                   Generate an image every run too (AI, via Gemini — free)
                 </label>
-                <SubmitButton pendingText="Creating…">Create schedule</SubmitButton>
+                <label className="flex items-center gap-2 text-sm text-slate-600">
+                  <input
+                    type="checkbox"
+                    name="requireApproval"
+                    defaultChecked
+                    className="rounded border-slate-300"
+                  />
+                  Require my approval before posting (recommended) — review it on Drafts first
+                </label>
               </div>
+              <SubmitButton pendingText="Creating…">Create schedule</SubmitButton>
             </form>
           )}
         </CardContent>
@@ -182,6 +191,8 @@ export default async function SchedulesPage({
                       {schedule.topic ? ` · Topic: ${schedule.topic}` : " · Auto-picked topics"}
                       {nicheLabel(schedule.niche) && ` · Niche: ${nicheLabel(schedule.niche)}`}
                       {schedule.generate_image && " · + AI image"}
+                      {" · "}
+                      {schedule.require_approval ? "Needs your approval" : "Auto-publishes (no review)"}
                     </span>
                     {schedule.role_prompt && (
                       <span className="block italic text-slate-500">Role: {schedule.role_prompt}</span>
