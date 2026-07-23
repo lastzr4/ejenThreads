@@ -22,6 +22,33 @@ export async function deleteDraft(formData: FormData) {
 }
 
 /**
+ * Bulk cleanup for when drafts/pending-review/failed rows pile up.
+ * Deliberately leaves "posted" rows alone — those are a real history of
+ * what actually went out live, not clutter — this only clears the rows
+ * that are just sitting there unpublished or errored.
+ */
+export async function clearDrafts() {
+  const supabase = createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { error } = await supabase
+    .from("scheduled_posts")
+    .delete()
+    .eq("user_id", user.id)
+    .in("status", ["draft", "pending_review", "failed"]);
+
+  if (error) {
+    redirect(`/dashboard/drafts?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/dashboard/drafts");
+  redirect("/dashboard/drafts?message=" + encodeURIComponent("Cleared unpublished drafts"));
+}
+
+/**
  * The "review before it goes out" step (see ScheduleRow.require_approval
  * in lib/scheduler/process-schedule.ts): a schedule generates content and
  * stops at status "pending_review" without ever calling the Threads API.

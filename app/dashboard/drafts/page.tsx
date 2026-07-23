@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { deleteDraft, approveAndPublishDraft } from "./actions";
+import { deleteDraft, approveAndPublishDraft, clearDrafts } from "./actions";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/submit-button";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { CopyDraftButton } from "@/components/copy-draft-button";
 import { LocalDateTime } from "@/components/local-datetime";
@@ -21,16 +22,37 @@ export default async function DraftsPage({
     )
     .order("created_at", { ascending: false });
 
+  const clearableCount = (drafts ?? []).filter((d) =>
+    ["draft", "pending_review", "failed"].includes(d.status)
+  ).length;
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold">Drafts</h1>
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="text-xl font-semibold">Drafts</h1>
+          {clearableCount > 0 && (
+            <form action={clearDrafts}>
+              <ConfirmSubmitButton
+                variant="outline"
+                size="sm"
+                pendingText="Clearing…"
+                confirmMessage={`Delete ${clearableCount} unpublished/failed draft${
+                  clearableCount === 1 ? "" : "s"
+                }? Posted history is kept.`}
+              >
+                Clear drafts ({clearableCount})
+              </ConfirmSubmitButton>
+            </form>
+          )}
+        </div>
         <p className="mt-1 text-sm text-slate-500">
           Every post CopyCreator has generated — manual (Generate post button) and automatic
           (Schedules). <strong>draft</strong>/<strong>pending review</strong> are unpublished — review
           them and click <strong>Publish to Threads</strong> when you&apos;re happy with it (or Copy to
           post manually yourself). <strong>posted</strong> went out live via the Threads API,{" "}
-          <strong>failed</strong> means publishing hit an error.
+          <strong>failed</strong> means publishing hit an error. <strong>Clear drafts</strong> removes
+          every draft/pending review/failed row in one go — posted history is never touched.
         </p>
         {searchParams?.error && <p className="mt-2 text-sm text-red-600">{searchParams.error}</p>}
         {searchParams?.message && <p className="mt-2 text-sm text-green-600">{searchParams.message}</p>}
