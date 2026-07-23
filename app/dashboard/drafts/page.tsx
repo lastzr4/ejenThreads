@@ -6,6 +6,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { CopyDraftButton } from "@/components/copy-draft-button";
+import { EditDraftForm } from "@/components/edit-draft-form";
 import { LocalDateTime } from "@/components/local-datetime";
 
 export default async function DraftsPage({
@@ -119,23 +120,29 @@ export default async function DraftsPage({
                   {draft.image_error && (
                     <p className="text-sm text-amber-600">Image generation failed: {draft.image_error}</p>
                   )}
-                  <div className="space-y-2">
-                    {posts.map((text, i) => (
-                      <p
-                        key={i}
-                        className="whitespace-pre-wrap rounded-md border border-slate-100 bg-slate-50 p-3 text-sm"
-                      >
-                        {text}
-                      </p>
-                    ))}
-                  </div>
-                  {draft.text_attachment && (
-                    <details className="rounded-md border border-slate-100 bg-slate-50 p-3 text-sm">
-                      <summary className="cursor-pointer font-medium text-slate-700">
-                        Full story (long-form attachment — shown as &quot;See more&quot; on the post)
-                      </summary>
-                      <p className="mt-2 whitespace-pre-wrap text-slate-600">{draft.text_attachment}</p>
-                    </details>
+                  {canPublish ? (
+                    <EditDraftForm id={draft.id} posts={posts} textAttachment={draft.text_attachment} />
+                  ) : (
+                    <>
+                      <div className="space-y-2">
+                        {posts.map((text, i) => (
+                          <p
+                            key={i}
+                            className="whitespace-pre-wrap rounded-md border border-slate-100 bg-slate-50 p-3 text-sm"
+                          >
+                            {text}
+                          </p>
+                        ))}
+                      </div>
+                      {draft.text_attachment && (
+                        <details className="rounded-md border border-slate-100 bg-slate-50 p-3 text-sm">
+                          <summary className="cursor-pointer font-medium text-slate-700">
+                            Full story (long-form attachment — shown as &quot;See more&quot; on the post)
+                          </summary>
+                          <p className="mt-2 whitespace-pre-wrap text-slate-600">{draft.text_attachment}</p>
+                        </details>
+                      )}
+                    </>
                   )}
                   {draft.status === "failed" && draft.threads_post_id && (
                     <p className="text-sm text-amber-600">

@@ -22,6 +22,71 @@ export async function deleteDraft(formData: FormData) {
 }
 
 /**
+ * Lets the user edit a draft's post text (and its long-form text_attachment,
+ * if it has one) before publishing — for fixing a typo, shortening
+ * something, or just not liking the AI's phrasing, without having to
+ * regenerate the whole thing from scratch. Only allowed while the draft is
+ * still unpublished ("draft" or "pending_review") — once it's posted or
+ * failed, editing this row wouldn't change anything actually on Threads.
+ */
+export async function updateDraftContent(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+
+  const supabase = createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data: draft } = await supabase
+    .from("scheduled_posts")
+    .select("id, status")
+    .eq("id", id)
+    .single();
+
+  if (!draft) {
+    redirect("/dashboard/drafts?error=Draft%20not%20found");
+  }
+
+  if (draft.status !== "draft" && draft.status !== "pending_review") {
+    redirect(
+      "/dashboard/drafts?error=" +
+        encodeURIComponent("Only unpublished drafts can be edited")
+    );
+  }
+
+  const posts = formData
+    .getAll("posts")
+    .map((p) => String(p).trim())
+    .filter((p) => p.length > 0);
+
+  if (posts.length === 0) {
+    redirect(`/dashboard/drafts?error=${encodeURIComponent("Post text can't be empty")}`);
+  }
+
+  const textAttachmentRaw = formData.get("textAttachment");
+  const textAttachment =
+    typeof textAttachmentRaw === "string" && textAttachmentRaw.trim() ? textAttachmentRaw.trim() : null;
+
+  const { error } = await supabase
+    .from("scheduled_posts")
+    .update({
+      content_draft: posts,
+      post_type: posts.length > 1 ? "thread" : "single",
+      text_attachment: textAttachment
+    })
+    .eq("id", id);
+
+  if (error) {
+    redirect(`/dashboard/drafts?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/dashboard/drafts");
+  redirect(`/dashboard/drafts?message=${encodeURIComponent("Draft updated")}`);
+}
+
+/**
  * Bulk cleanup for the whole Drafts tab — every row for this user,
  * regardless of status, including "posted" (real publish history). User
  * explicitly asked for posted rows to be clearable too, not just kept
