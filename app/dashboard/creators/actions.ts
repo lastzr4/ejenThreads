@@ -103,7 +103,14 @@ export async function fetchPostsForCreator(formData: FormData) {
     if (posts.length > 0) {
       const withIds = posts
         .map((p) => ({ ...p, resolvedId: resolvePostId(p) }))
-        .filter((p) => p.resolvedId);
+        .filter((p) => p.resolvedId)
+        // Some posts (video-only, or ones the DOM extractor just couldn't
+        // reach cleanly) come back with neither text nor media captured —
+        // storing those adds nothing (Study already ignores blank
+        // content_text, per the .not("content_text", "is", null) filters
+        // elsewhere) and just shows up as a confusing empty card on the
+        // creator page. Skip them at insert time rather than saving noise.
+        .filter((p) => (p.contentText && p.contentText.trim().length > 0) || p.mediaUrls.length > 0);
 
       // Postgres rejects an upsert batch containing two rows with the same
       // conflict target ("ON CONFLICT DO UPDATE command cannot affect row
