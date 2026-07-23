@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { processSchedule } from "@/lib/scheduler/process-schedule";
+import { uploadGeneratedImage } from "@/lib/storage/upload-image";
 
 const ALLOWED_INTERVALS = [1, 2, 4, 6, 12, 24];
 
@@ -19,6 +20,8 @@ export async function createSchedule(formData: FormData) {
   // explicitly unchecks it — a plain <input type="checkbox"> only appears
   // in formData at all when checked, so absence means "off" here.
   const requireApproval = formData.get("requireApproval") === "on";
+  const fixedImageFile = formData.get("fixedImage");
+  const hasFixedImage = fixedImageFile instanceof File && fixedImageFile.size > 0;
 
   if (!creatorId || !ALLOWED_INTERVALS.includes(intervalHours)) {
     redirect("/dashboard/schedules?error=Pick+a+creator+and+a+valid+interval");
@@ -43,6 +46,26 @@ export async function createSchedule(formData: FormData) {
     );
   }
 
+  // Uploaded once here at schedule-creation time (not per-run) — a schedule
+  // recurs with no file to re-upload each tick, so the same public URL is
+  // just reused by every future run instead (see fixed_image_url handling
+  // in lib/scheduler/process-schedule.ts).
+  let fixedImageUrl: string | null = null;
+  if (hasFixedImage) {
+    try {
+      const file = fixedImageFile as File;
+      const buffer = Buffer.from(await file.arrayBuffer());
+      fixedImageUrl = await uploadGeneratedImage(buffer, file.type || "image/jpeg");
+    } catch (err) {
+      redirect(
+        "/dashboard/schedules?error=" +
+          encodeURIComponent(
+            "Fixed image upload failed: " + (err instanceof Error ? err.message : "unknown error")
+          )
+      );
+    }
+  }
+
   const { error } = await supabase.from("posting_schedules").insert({
     user_id: user.id,
     creator_id: creatorId,
@@ -52,6 +75,7 @@ export async function createSchedule(formData: FormData) {
     niche: niche || null,
     role_prompt: role || null,
     generate_image: generateImage,
+    fixed_image_url: fixedImageUrl,
     require_approval: requireApproval,
     next_run_at: new Date().toISOString()
   });
@@ -114,7 +138,7 @@ export async function runScheduleNow(formData: FormData) {
   const { data: schedule } = await supabase
     .from("posting_schedules")
     .select(
-      "id, user_id, creator_id, interval_hours, post_type, topic, niche, role_prompt, generate_image, require_approval"
+      "id, user_id, creator_id, interval_hours, post_type, topic, niche, role_prompt, generate_image, fixed_image_url, require_approval"
     )
     .eq("id", id)
     .single();

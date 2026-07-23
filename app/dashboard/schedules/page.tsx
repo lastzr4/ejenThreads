@@ -31,7 +31,7 @@ export default async function SchedulesPage({
   const { data: schedules } = await supabase
     .from("posting_schedules")
     .select(
-      "id, creator_id, interval_hours, post_type, topic, niche, role_prompt, generate_image, require_approval, is_active, next_run_at, last_run_at, last_result, last_error, creators(username)"
+      "id, creator_id, interval_hours, post_type, topic, niche, role_prompt, generate_image, fixed_image_url, require_approval, is_active, next_run_at, last_run_at, last_result, last_error, creators(username)"
     )
     .order("created_at", { ascending: false });
 
@@ -143,10 +143,21 @@ export default async function SchedulesPage({
                   className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
                 />
               </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  Upload a fixed image (optional) — reused for every run instead of AI generation
+                </label>
+                <input
+                  type="file"
+                  name="fixedImage"
+                  accept="image/*"
+                  className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
+                />
+              </div>
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-sm text-slate-600">
                   <input type="checkbox" name="generateImage" className="rounded border-slate-300" />
-                  Generate an image every run too (AI, via Gemini — free)
+                  Generate an image every run too (AI, via Gemini — free, ignored if you upload a fixed image above)
                 </label>
                 <label className="flex items-center gap-2 text-sm text-slate-600">
                   <input
@@ -190,12 +201,22 @@ export default async function SchedulesPage({
                       {schedule.post_type === "thread" ? "Thread" : "Single post"}
                       {schedule.topic ? ` · Topic: ${schedule.topic}` : " · Auto-picked topics"}
                       {nicheLabel(schedule.niche) && ` · Niche: ${nicheLabel(schedule.niche)}`}
-                      {schedule.generate_image && " · + AI image"}
+                      {schedule.fixed_image_url
+                        ? " · + fixed uploaded image"
+                        : schedule.generate_image && " · + AI image"}
                       {" · "}
                       {schedule.require_approval ? "Needs your approval" : "Auto-publishes (no review)"}
                     </span>
                     {schedule.role_prompt && (
                       <span className="block italic text-slate-500">Role: {schedule.role_prompt}</span>
+                    )}
+                    {schedule.fixed_image_url && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={schedule.fixed_image_url}
+                        alt="Fixed image used every run"
+                        className="mt-1 h-16 w-16 rounded-md border border-slate-200 object-cover"
+                      />
                     )}
                     <span className="block">
                       Next run: <LocalDateTime iso={schedule.next_run_at} />

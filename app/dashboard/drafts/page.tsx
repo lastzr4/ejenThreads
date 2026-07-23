@@ -18,7 +18,7 @@ export default async function DraftsPage({
   const { data: drafts } = await supabase
     .from("scheduled_posts")
     .select(
-      "id, post_type, content_draft, image_url, image_error, text_attachment, status, error_message, threads_post_id, created_at, creators(username)"
+      "id, post_type, content_draft, image_url, image_error, uploaded_image, text_attachment, status, error_message, threads_post_id, created_at, creators(username)"
     )
     .order("created_at", { ascending: false });
 
@@ -104,12 +104,17 @@ export default async function DraftsPage({
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {draft.image_url && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={draft.image_url}
-                      alt="AI-generated"
-                      className="max-h-64 w-full rounded-md border border-slate-100 object-cover"
-                    />
+                    <div className="space-y-1">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={draft.image_url}
+                        alt={draft.uploaded_image ? "Uploaded by you" : "AI-generated"}
+                        className="max-h-64 w-full rounded-md border border-slate-100 object-cover"
+                      />
+                      <p className="text-xs text-slate-400">
+                        {draft.uploaded_image ? "Uploaded by you" : "AI-generated"}
+                      </p>
+                    </div>
                   )}
                   {draft.image_error && (
                     <p className="text-sm text-amber-600">Image generation failed: {draft.image_error}</p>

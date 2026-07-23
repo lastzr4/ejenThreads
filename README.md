@@ -369,6 +369,30 @@ error). If image generation fails for any reason, the post text still
 saves fine — you just
 won't get an image on that one.
 
+**Upload your own image** (optional, available on both the manual Generate
+form and Schedules): pick an image file instead of relying on AI generation.
+On the manual form it's uploaded and attached to that one draft (skips the
+Gemini call entirely — no point AI-generating an image about to be
+overridden). On a Schedule, the image is uploaded once, when the schedule is
+created (`posting_schedules.fixed_image_url`), and every future run of that
+schedule reuses the same public URL — a recurring schedule has no fresh
+file to re-upload each tick. Either way it's stored in the same
+`generated-images` Storage bucket as AI images; the Drafts page labels each
+image "Uploaded by you" vs "AI-generated" (`scheduled_posts.uploaded_image`)
+so it's clear which is which.
+
+**Knowledge base** (optional, per creator): on a creator's detail page,
+upload a single PDF — it's parsed server-side (`pdf-parse`) and the
+extracted text is saved as `creators.knowledge_base_text` (capped at 40,000
+characters; re-uploading replaces the previous document). Whenever that
+creator is used for generation — manual Generate, or any Schedule pointed
+at them — the extracted text is folded into the prompt as reference
+material, with Claude instructed to draw on/revolve posts around it where
+relevant (e.g. a product catalog, an ebook, a set of notes), rather than
+just following generic style. Not required — creators with no knowledge
+base generate exactly as before. Remove it any time with the **Remove**
+button next to the uploaded filename.
+
 The result is saved into `scheduled_posts` with `status: 'draft'` (manual
 Generate) or `'posted'`/`'failed'` (Schedules/cron — see Module 4).
 
@@ -462,11 +486,12 @@ fully expire, just click Connect again.
 **Dashboard → Schedules** → pick a creator you've already Studied
 (Module 2), an interval (every 1/2/4/6/12/24 hours), a niche preset,
 single post or thread, optionally a recurring topic (e.g. a product name +
-affiliate link to keep tagging), a Role (see Module 3), optionally
-**Generate an image every run too**, and **Require my approval before
-posting** (checked by default). Save, and it's live. There's also a **Run
-now** button on each schedule card — runs it immediately instead of
-waiting for the interval, handy for testing right after creating one.
+affiliate link to keep tagging), a Role (see Module 3), optionally upload a
+**fixed image** (reused every run — see Module 3) or check **Generate an
+image every run too**, and **Require my approval before posting** (checked
+by default). Save, and it's live. There's also a **Run now** button on each
+schedule card — runs it immediately instead of waiting for the interval,
+handy for testing right after creating one.
 
 ### Review before posting (default) vs. fully automatic
 

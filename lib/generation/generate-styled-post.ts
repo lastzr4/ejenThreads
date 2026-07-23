@@ -114,7 +114,11 @@ export async function generateStyledPost({
   role,
   generateImage: wantsImage = false
 }: GenerateStyledPostParams): Promise<GenerateStyledPostResult> {
-  const { data: creator } = await supabase.from("creators").select("username").eq("id", creatorId).single();
+  const { data: creator } = await supabase
+    .from("creators")
+    .select("username, knowledge_base_text")
+    .eq("id", creatorId)
+    .single();
 
   const { data: analysis } = await supabase
     .from("creator_analysis")
@@ -143,6 +147,7 @@ export async function generateStyledPost({
     .map((p, i) => `Example ${i + 1}: ${p.content_text}`)
     .join("\n\n");
 
+  const knowledgeBase = (creator?.knowledge_base_text ?? "").trim();
   const nicheDescription = nicheLabel(niche);
   const isAffiliateNiche = niche === "affiliate_product";
   const hasRole = Boolean(role && role.trim());
@@ -169,6 +174,11 @@ export async function generateStyledPost({
     `Vocabulary notes: ${analysis.vocabulary_notes}\n` +
     `Style guide: ${analysis.generated_rules}\n\n` +
     (examplesBlock ? `REAL EXAMPLES (for rhythm/length reference only — do not copy):\n${examplesBlock}\n\n` : "") +
+    (knowledgeBase
+      ? `REFERENCE KNOWLEDGE BASE (uploaded by the user for this creator — use this as background/source ` +
+        `material; the post should draw on, reference, or revolve around facts and ideas from this content ` +
+        `where it fits the topic, rather than only relying on generic style):\n${knowledgeBase}\n\n`
+      : "") +
     (hasRole
       ? `ROLE / FORMAT INSTRUCTIONS (these take priority over generic formatting — follow them for the ` +
         `overall shape, narrative structure, and framing of this post; still write in the creator's tone/ ` +

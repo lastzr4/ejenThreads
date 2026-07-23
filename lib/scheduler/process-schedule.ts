@@ -22,6 +22,14 @@ export interface ScheduleRow {
   role_prompt?: string | null;
   generate_image?: boolean | null;
   /**
+   * A user-uploaded image, set once at schedule-creation time (see
+   * createSchedule in app/dashboard/schedules/actions.ts), reused on every
+   * run of this schedule instead of AI generation — a schedule recurs with
+   * no fresh file to upload each tick, so the same public Storage URL just
+   * gets attached to every post. Takes priority over generate_image when set.
+   */
+  fixed_image_url?: string | null;
+  /**
    * When true (the default), a run only generates content and queues it
    * as a "pending_review" draft — nothing gets published until the user
    * approves it from the Drafts page (approveAndPublishDraft in
@@ -56,15 +64,24 @@ export async function processSchedule(
   const requiresApproval = schedule.require_approval !== false;
 
   try {
-    const { posts, imageUrl, imageError, textAttachment } = await generateStyledPost({
+    const hasFixedImage = Boolean(schedule.fixed_image_url);
+    const {
+      posts,
+      imageUrl: aiImageUrl,
+      imageError,
+      textAttachment
+    } = await generateStyledPost({
       supabase,
       creatorId: schedule.creator_id,
       topic: schedule.topic ?? undefined,
       postType: schedule.post_type as "single" | "thread",
       niche: schedule.niche,
       role: schedule.role_prompt,
-      generateImage: Boolean(schedule.generate_image)
+      // Skip AI generation entirely when a fixed image is set — it would
+      // just be thrown away below.
+      generateImage: Boolean(schedule.generate_image) && !hasFixedImage
     });
+    const imageUrl = hasFixedImage ? (schedule.fixed_image_url as string) : aiImageUrl;
 
     if (requiresApproval) {
       const { error: insertError } = await supabase.from("scheduled_posts").insert({
@@ -75,6 +92,7 @@ export async function processSchedule(
         content_draft: posts,
         image_url: imageUrl,
         image_error: imageError,
+        uploaded_image: hasFixedImage,
         text_attachment: textAttachment,
         status: "pending_review"
       });
@@ -115,6 +133,7 @@ export async function processSchedule(
         content_draft: posts,
         image_url: imageUrl,
         image_error: imageError,
+        uploaded_image: hasFixedImage,
         text_attachment: textAttachment,
         status: "failed",
         threads_post_id: isPartial ? publishErr.rootId : null,
@@ -131,6 +150,7 @@ export async function processSchedule(
       content_draft: posts,
       image_url: imageUrl,
       image_error: imageError,
+      uploaded_image: hasFixedImage,
       text_attachment: textAttachment,
       status: "posted",
       threads_post_id: threadsPostId,
