@@ -11,9 +11,14 @@ export default async function SettingsPage({
   searchParams: { error?: string; message?: string };
 }) {
   const supabase = createClient();
+  // getSession() instead of getUser() — middleware already did the
+  // server-verified auth check for this request; reading the session from
+  // the cookie here avoids a second network round trip to Supabase Auth
+  // just to get the user id for the query below.
   const {
-    data: { user }
-  } = await supabase.auth.getUser();
+    data: { session }
+  } = await supabase.auth.getSession();
+  const user = session?.user ?? null;
 
   const { data: settings } = await supabase
     .from("user_settings")

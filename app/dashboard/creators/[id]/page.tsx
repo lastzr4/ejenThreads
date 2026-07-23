@@ -20,31 +20,35 @@ export default async function CreatorDetailPage({
 }) {
   const supabase = createClient();
 
-  const { data: creator } = await supabase
-    .from("creators")
-    .select(
-      "id, username, last_scraped_at, knowledge_base_text, knowledge_base_filename, knowledge_base_updated_at"
-    )
-    .eq("id", params.id)
-    .single();
+  // All three queries key off params.id (creator_id === creators.id), so
+  // none actually depends on another's result — running them in parallel
+  // instead of one-after-another cuts this page's data-fetch time to
+  // roughly the slowest single query instead of the sum of all three.
+  const [{ data: creator }, { data: posts }, { data: analysis }] = await Promise.all([
+    supabase
+      .from("creators")
+      .select(
+        "id, username, last_scraped_at, knowledge_base_text, knowledge_base_filename, knowledge_base_updated_at"
+      )
+      .eq("id", params.id)
+      .single(),
+    supabase
+      .from("scraped_threads")
+      .select("id, content_text, like_count, reply_count, repost_count, published_at, post_url")
+      .eq("creator_id", params.id)
+      .order("published_at", { ascending: false, nullsFirst: false }),
+    supabase
+      .from("creator_analysis")
+      .select(
+        "style_tone, hook_patterns, threading_structure, emoji_usage, cta_patterns, vocabulary_notes, generated_rules, sample_size, model_used, updated_at"
+      )
+      .eq("creator_id", params.id)
+      .maybeSingle()
+  ]);
 
   if (!creator) {
     notFound();
   }
-
-  const { data: posts } = await supabase
-    .from("scraped_threads")
-    .select("id, content_text, like_count, reply_count, repost_count, published_at, post_url")
-    .eq("creator_id", creator.id)
-    .order("published_at", { ascending: false, nullsFirst: false });
-
-  const { data: analysis } = await supabase
-    .from("creator_analysis")
-    .select(
-      "style_tone, hook_patterns, threading_structure, emoji_usage, cta_patterns, vocabulary_notes, generated_rules, sample_size, model_used, updated_at"
-    )
-    .eq("creator_id", creator.id)
-    .maybeSingle();
 
   const totalPosts = posts?.length ?? 0;
   const totalReplies = (posts ?? []).reduce((sum, p) => sum + (p.reply_count ?? 0), 0);

@@ -22,18 +22,21 @@ export default async function SchedulesPage({
 }) {
   const supabase = createClient();
 
-  const { data: creators } = await supabase.from("creators").select("id, username").order("username");
+  // None of these three depends on another's result — parallelizing avoids
+  // three sequential round trips to Supabase on every visit to this page.
+  const [{ data: creators }, { data: analyzedRows }, { data: schedules }] = await Promise.all([
+    supabase.from("creators").select("id, username").order("username"),
+    supabase.from("creator_analysis").select("creator_id"),
+    supabase
+      .from("posting_schedules")
+      .select(
+        "id, creator_id, interval_hours, post_type, topic, niche, role_prompt, generate_image, fixed_image_url, require_approval, is_active, next_run_at, last_run_at, last_result, last_error, creators(username)"
+      )
+      .order("created_at", { ascending: false })
+  ]);
 
-  const { data: analyzedRows } = await supabase.from("creator_analysis").select("creator_id");
   const analyzedCreatorIds = new Set((analyzedRows ?? []).map((r) => r.creator_id));
   const studiedCreators = (creators ?? []).filter((c) => analyzedCreatorIds.has(c.id));
-
-  const { data: schedules } = await supabase
-    .from("posting_schedules")
-    .select(
-      "id, creator_id, interval_hours, post_type, topic, niche, role_prompt, generate_image, fixed_image_url, require_approval, is_active, next_run_at, last_run_at, last_result, last_error, creators(username)"
-    )
-    .order("created_at", { ascending: false });
 
   return (
     <div className="space-y-6">
