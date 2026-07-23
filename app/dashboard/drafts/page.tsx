@@ -22,9 +22,7 @@ export default async function DraftsPage({
     )
     .order("created_at", { ascending: false });
 
-  const clearableCount = (drafts ?? []).filter((d) =>
-    ["draft", "pending_review", "failed"].includes(d.status)
-  ).length;
+  const clearableCount = (drafts ?? []).length;
 
   return (
     <div className="space-y-6">
@@ -37,11 +35,11 @@ export default async function DraftsPage({
                 variant="outline"
                 size="sm"
                 pendingText="Clearing…"
-                confirmMessage={`Delete ${clearableCount} unpublished/failed draft${
+                confirmMessage={`Delete all ${clearableCount} row${
                   clearableCount === 1 ? "" : "s"
-                }? Posted history is kept.`}
+                } in Drafts, including posted history? This only removes CopyCreator's own record — it does NOT unpublish anything already live on Threads. This can't be undone.`}
               >
-                Clear drafts ({clearableCount})
+                Clear all ({clearableCount})
               </ConfirmSubmitButton>
             </form>
           )}
@@ -51,8 +49,9 @@ export default async function DraftsPage({
           (Schedules). <strong>draft</strong>/<strong>pending review</strong> are unpublished — review
           them and click <strong>Publish to Threads</strong> when you&apos;re happy with it (or Copy to
           post manually yourself). <strong>posted</strong> went out live via the Threads API,{" "}
-          <strong>failed</strong> means publishing hit an error. <strong>Clear drafts</strong> removes
-          every draft/pending review/failed row in one go — posted history is never touched.
+          <strong>failed</strong> means publishing hit an error. <strong>Clear all</strong> wipes every
+          row shown here, including posted history — it only removes CopyCreator&apos;s own record of
+          them, it does not unpublish anything already live on Threads.
         </p>
         {searchParams?.error && <p className="mt-2 text-sm text-red-600">{searchParams.error}</p>}
         {searchParams?.message && <p className="mt-2 text-sm text-green-600">{searchParams.message}</p>}

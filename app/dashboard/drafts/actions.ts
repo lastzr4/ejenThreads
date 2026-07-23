@@ -22,10 +22,11 @@ export async function deleteDraft(formData: FormData) {
 }
 
 /**
- * Bulk cleanup for when drafts/pending-review/failed rows pile up.
- * Deliberately leaves "posted" rows alone — those are a real history of
- * what actually went out live, not clutter — this only clears the rows
- * that are just sitting there unpublished or errored.
+ * Bulk cleanup for the whole Drafts tab — every row for this user,
+ * regardless of status, including "posted" (real publish history). User
+ * explicitly asked for posted rows to be clearable too, not just kept
+ * forever — this does NOT touch the actual live posts on Threads, only
+ * this app's local record of them.
  */
 export async function clearDrafts() {
   const supabase = createClient();
@@ -34,18 +35,14 @@ export async function clearDrafts() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { error } = await supabase
-    .from("scheduled_posts")
-    .delete()
-    .eq("user_id", user.id)
-    .in("status", ["draft", "pending_review", "failed"]);
+  const { error } = await supabase.from("scheduled_posts").delete().eq("user_id", user.id);
 
   if (error) {
     redirect(`/dashboard/drafts?error=${encodeURIComponent(error.message)}`);
   }
 
   revalidatePath("/dashboard/drafts");
-  redirect("/dashboard/drafts?message=" + encodeURIComponent("Cleared unpublished drafts"));
+  redirect("/dashboard/drafts?message=" + encodeURIComponent("Cleared all drafts"));
 }
 
 /**
