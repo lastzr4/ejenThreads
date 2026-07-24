@@ -382,9 +382,15 @@ image "Uploaded by you" vs "AI-generated" (`scheduled_posts.uploaded_image`)
 so it's clear which is which.
 
 **Knowledge base** (optional, per creator): on a creator's detail page,
-upload a single PDF — it's parsed server-side (`pdf-parse`) and the
-extracted text is saved as `creators.knowledge_base_text` (capped at 40,000
-characters; re-uploading replaces the previous document). Whenever that
+either upload a single PDF (parsed server-side with `pdf-parse`) or paste a
+webpage URL (fetched and its readable text extracted with a small
+dependency-free HTML-to-text helper, `lib/knowledge/extract-webpage-text.ts`
+— strips scripts/styles/nav/footer, decodes entities; not a full
+Readability-style parser, but enough for reference material). Either way
+the result is saved as `creators.knowledge_base_text` (capped at 40,000
+characters; adding a new one — PDF or URL — replaces whatever was there
+before, since this is a single reference document per creator, not a
+library). Whenever that
 creator is used for generation — manual Generate, or any Schedule pointed
 at them — the extracted text is folded into the prompt as reference
 material, with Claude instructed to draw on/revolve posts around it where
