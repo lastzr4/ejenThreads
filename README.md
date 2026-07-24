@@ -562,6 +562,36 @@ changes.
 - Text posts are capped at 500 characters (`generate-styled-post.ts`
   already asks Claude to stay well under that per post).
 
+## Mobile / PWA
+
+CopyCreator is installable as a Progressive Web App — on Android Chrome,
+open the site and use "Add to Home Screen"; on iOS Safari, use the Share
+sheet → "Add to Home Screen". It then launches full-screen (no browser
+address bar) like a native app.
+
+What makes this work: `public/manifest.webmanifest` (name, icons, theme
+color, `display: standalone`), icon files in `public/icons/` (192/512/
+maskable/apple-touch), viewport/theme-color metadata in `app/layout.tsx`,
+and a minimal service worker (`public/sw.js`, registered via
+`components/register-service-worker.tsx`). The service worker only ever
+caches same-origin static assets (`/icons/*`, the manifest, Next's hashed
+`/_next/static/*` bundles) — every dashboard page is dynamic, per-user,
+auth-gated content, so it's never cached and always goes to the network;
+the service worker exists mainly so Chrome/Android recognize the app as
+installable.
+
+The dashboard header nav (`components/dashboard-nav.tsx`) collapses into a
+hamburger menu below the `md` breakpoint instead of overflowing on phone
+widths.
+
+**On generation feeling slow**: Generate post / Study / a schedule's Run
+now all call external APIs (Claude, and Gemini for images) that genuinely
+take a few seconds to 20+ seconds — that latency itself can't be
+eliminated, but every one of those buttons now shows an inline "here's
+what's happening / how long this usually takes" message
+(`components/pending-banner.tsx`) while it runs, instead of just a frozen
+button, so a normal wait doesn't read as the app being stuck.
+
 ## What's next
 
 Auth, Module 1 (creator tracker + scraper), Module 2 (style analyzer),
