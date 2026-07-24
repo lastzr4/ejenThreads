@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { fetchPostsForCreator } from "../actions";
 import { studyCreator } from "../analyze-actions";
 import { generatePost } from "../generate-actions";
-import { uploadKnowledgeBase, clearKnowledgeBase } from "../knowledge-actions";
+import { uploadKnowledgeBase, addKnowledgeBaseFromUrl, clearKnowledgeBase } from "../knowledge-actions";
 import { SubmitButton } from "@/components/submit-button";
 import { PendingBanner } from "@/components/pending-banner";
 import { Button } from "@/components/ui/button";
@@ -140,15 +140,17 @@ export default async function CreatorDetailPage({
         <CardHeader>
           <CardTitle className="text-base">Knowledge base (optional)</CardTitle>
           <CardDescription>
-            Upload a PDF for this creator — AI reads it and generated posts can draw on and revolve around
-            its content (e.g. a product catalog, an ebook, a set of notes).
+            Upload a PDF, or paste a webpage URL, for this creator — AI reads it and generated posts can
+            draw on and revolve around its content (e.g. a product catalog, an ebook, a set of notes, an
+            article). Adding a new one replaces whatever was there before — this holds one reference
+            source per creator, not a library.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {creator.knowledge_base_filename ? (
             <div className="flex items-center justify-between gap-3 rounded-md border border-slate-100 bg-slate-50 p-3 text-sm">
               <div>
-                <p className="font-medium text-slate-700">{creator.knowledge_base_filename}</p>
+                <p className="font-medium text-slate-700 break-all">{creator.knowledge_base_filename}</p>
                 <p className="text-xs text-slate-500">
                   Updated <LocalDateTime iso={creator.knowledge_base_updated_at} />
                 </p>
@@ -161,9 +163,9 @@ export default async function CreatorDetailPage({
               </form>
             </div>
           ) : (
-            <p className="text-sm text-slate-500">No knowledge base uploaded yet for this creator.</p>
+            <p className="text-sm text-slate-500">No knowledge base added yet for this creator.</p>
           )}
-          <form action={uploadKnowledgeBase} className="flex items-center gap-2">
+          <form action={uploadKnowledgeBase} className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <input type="hidden" name="creatorId" value={creator.id} />
             <input
               type="file"
@@ -173,7 +175,25 @@ export default async function CreatorDetailPage({
               className="block flex-1 text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
             />
             <SubmitButton size="sm" pendingText="Reading PDF…">
-              {creator.knowledge_base_filename ? "Replace" : "Upload"}
+              {creator.knowledge_base_filename ? "Replace with PDF" : "Upload PDF"}
+            </SubmitButton>
+          </form>
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <span className="h-px flex-1 bg-slate-200" />
+            or
+            <span className="h-px flex-1 bg-slate-200" />
+          </div>
+          <form action={addKnowledgeBaseFromUrl} className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input type="hidden" name="creatorId" value={creator.id} />
+            <input
+              type="url"
+              name="knowledgeUrl"
+              placeholder="https://example.com/some-article"
+              required
+              className="w-full flex-1 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
+            />
+            <SubmitButton size="sm" pendingText="Fetching page…">
+              {creator.knowledge_base_filename ? "Replace with URL" : "Fetch URL"}
             </SubmitButton>
           </form>
         </CardContent>

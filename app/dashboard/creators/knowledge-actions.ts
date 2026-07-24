@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import pdfParse from "pdf-parse";
 import { createClient } from "@/lib/supabase/server";
+import { extractWebpageText } from "@/lib/knowledge/extract-webpage-text";
 
 // Roughly ~40,000 characters is already far more than any single Claude
 // prompt needs as reference material (see how this gets used in
@@ -76,6 +77,60 @@ export async function uploadKnowledgeBase(formData: FormData) {
     errorMessage
       ? `/dashboard/creators/${creatorId}?error=${encodeURIComponent(errorMessage)}`
       : `/dashboard/creators/${creatorId}?message=${encodeURIComponent("Knowledge base updated")}`
+  );
+}
+
+/**
+ * Alternative to uploadKnowledgeBase — paste a webpage URL instead of a
+ * PDF file. Fetches the page server-side, extracts its readable text
+ * (lib/knowledge/extract-webpage-text.ts), and stores it the same way a
+ * PDF would be: same creators.knowledge_base_text column, same 40,000-
+ * character cap, same "replaces whatever was there before" behavior. Either
+ * source feeds the exact same downstream generation logic — the creator's
+ * knowledge base doesn't track or care which way its current text arrived.
+ */
+export async function addKnowledgeBaseFromUrl(formData: FormData) {
+  const creatorId = String(formData.get("creatorId") ?? "");
+  const url = String(formData.get("knowledgeUrl") ?? "").trim();
+  if (!creatorId) return;
+
+  const supabase = createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  if (!url) {
+    redirect(`/dashboard/creators/${creatorId}?error=${encodeURIComponent("Paste a URL to fetch")}`);
+  }
+
+  let errorMessage: string | null = null;
+
+  try {
+    const { title, text } = await extractWebpageText(url);
+    const truncated = text.length > MAX_KNOWLEDGE_CHARS ? text.slice(0, MAX_KNOWLEDGE_CHARS) : text;
+
+    const { error: updateError } = await supabase
+      .from("creators")
+      .update({
+        knowledge_base_text: truncated,
+        knowledge_base_filename: title ? `${title} (${url})` : url,
+        knowledge_base_updated_at: new Date().toISOString()
+      })
+      .eq("id", creatorId);
+
+    if (updateError) {
+      errorMessage = updateError.message;
+    }
+  } catch (err) {
+    errorMessage = err instanceof Error ? err.message : "Failed to read that URL";
+  }
+
+  revalidatePath(`/dashboard/creators/${creatorId}`);
+  redirect(
+    errorMessage
+      ? `/dashboard/creators/${creatorId}?error=${encodeURIComponent(errorMessage)}`
+      : `/dashboard/creators/${creatorId}?message=${encodeURIComponent("Knowledge base updated from URL")}`
   );
 }
 
