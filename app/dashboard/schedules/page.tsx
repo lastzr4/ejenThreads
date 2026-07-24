@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createSchedule, toggleSchedule, deleteSchedule, runScheduleNow } from "./actions";
 import { SubmitButton } from "@/components/submit-button";
+import { PendingBanner } from "@/components/pending-banner";
 import { LocalDateTime } from "@/components/local-datetime";
 import { NICHE_OPTIONS, nicheLabel } from "@/lib/niches";
 import { Button } from "@/components/ui/button";
@@ -235,12 +236,13 @@ export default async function SchedulesPage({
                     )}
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="flex items-center gap-2">
-                  <form action={runScheduleNow}>
+                <CardContent className="flex flex-wrap items-center gap-2">
+                  <form action={runScheduleNow} className="flex flex-col items-start gap-1">
                     <input type="hidden" name="id" value={schedule.id} />
                     <SubmitButton variant="outline" size="sm" pendingText="Running…">
                       Run now
                     </SubmitButton>
+                    <PendingBanner message="Generating (and publishing, unless approval is required) — up to ~20 seconds." />
                   </form>
                   <form action={toggleSchedule}>
                     <input type="hidden" name="id" value={schedule.id} />

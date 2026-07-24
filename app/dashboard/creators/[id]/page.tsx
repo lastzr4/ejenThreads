@@ -6,6 +6,7 @@ import { studyCreator } from "../analyze-actions";
 import { generatePost } from "../generate-actions";
 import { uploadKnowledgeBase, clearKnowledgeBase } from "../knowledge-actions";
 import { SubmitButton } from "@/components/submit-button";
+import { PendingBanner } from "@/components/pending-banner";
 import { Button } from "@/components/ui/button";
 import { LocalDateTime } from "@/components/local-datetime";
 import { NICHE_OPTIONS } from "@/lib/niches";
@@ -59,19 +60,21 @@ export default async function CreatorDetailPage({
         <Link href="/dashboard/creators" className="text-sm text-slate-500 hover:underline">
           &larr; Creators
         </Link>
-        <div className="mt-1 flex items-center justify-between">
+        <div className="mt-1 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <h1 className="text-xl font-semibold">@{creator.username}</h1>
-          <div className="flex items-center gap-2">
-            <form action={fetchPostsForCreator}>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+            <form action={fetchPostsForCreator} className="flex flex-col items-start gap-1">
               <input type="hidden" name="id" value={creator.id} />
               <input type="hidden" name="username" value={creator.username} />
-              <SubmitButton pendingText="Fetching… (up to 30s, scrolls for more posts)">Fetch recent posts</SubmitButton>
+              <SubmitButton pendingText="Fetching…">Fetch recent posts</SubmitButton>
+              <PendingBanner message="Scrolling and collecting posts — can take up to 30 seconds." />
             </form>
-            <form action={studyCreator}>
+            <form action={studyCreator} className="flex flex-col items-start gap-1">
               <input type="hidden" name="id" value={creator.id} />
               <SubmitButton pendingText="Studying…" variant="outline" disabled={totalPosts === 0}>
                 Study
               </SubmitButton>
+              <PendingBanner message="Analyzing style with Claude — usually just a few seconds." />
             </form>
           </div>
         </div>
@@ -250,13 +253,14 @@ export default async function CreatorDetailPage({
                   className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
                 />
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <label className="flex items-center gap-2 text-sm text-slate-600">
                   <input type="checkbox" name="generateImage" className="rounded border-slate-300" />
                   Generate an image too (AI, via Gemini — free, ignored if you upload your own above)
                 </label>
-                <SubmitButton pendingText="Generating… (image can take ~15s)">Generate post</SubmitButton>
+                <SubmitButton pendingText="Generating…">Generate post</SubmitButton>
               </div>
+              <PendingBanner message="Writing your post with Claude — longer if generating an image too (up to ~20 seconds total). This new draft will show up on the Drafts page when it's done." />
             </form>
           </CardContent>
         </Card>

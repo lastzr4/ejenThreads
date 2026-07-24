@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { signOut } from "@/app/login/actions";
 import { Button } from "@/components/ui/button";
+import { DashboardNav } from "@/components/dashboard-nav";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient();
@@ -28,29 +28,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
+      <header className="relative flex items-center justify-between border-b border-slate-200 bg-white px-4 py-4 sm:px-6">
         <div className="flex items-center gap-6">
           <span className="font-semibold">CopyCreator</span>
-          <nav className="flex items-center gap-4 text-sm text-slate-600">
-            <Link href="/dashboard" className="hover:text-slate-900">
-              Dashboard
-            </Link>
-            <Link href="/dashboard/creators" className="hover:text-slate-900">
-              Creators
-            </Link>
-            <Link href="/dashboard/drafts" className="hover:text-slate-900">
-              Drafts
-            </Link>
-            <Link href="/dashboard/schedules" className="hover:text-slate-900">
-              Schedules
-            </Link>
-            <Link href="/dashboard/settings" className="hover:text-slate-900">
-              Settings
-            </Link>
-          </nav>
+          <DashboardNav />
         </div>
-        <div className="flex items-center gap-4 text-sm text-slate-600">
-          <span>{user.email}</span>
+        <div className="flex items-center gap-2 text-sm text-slate-600 sm:gap-4">
+          <span className="hidden sm:inline">{user.email}</span>
           <form action={signOut}>
             <Button variant="ghost" size="sm" type="submit">
               Sign out
@@ -58,7 +42,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           </form>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl p-6">{children}</main>
+      <main className="mx-auto max-w-5xl p-4 sm:p-6">{children}</main>
     </div>
   );
 }
