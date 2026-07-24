@@ -381,16 +381,25 @@ file to re-upload each tick. Either way it's stored in the same
 image "Uploaded by you" vs "AI-generated" (`scheduled_posts.uploaded_image`)
 so it's clear which is which.
 
-**Knowledge base** (optional, per creator): on a creator's detail page,
-either upload a single PDF (parsed server-side with `pdf-parse`) or paste a
+**Knowledge base** (optional, per creator, additive): on a creator's detail
+page, upload a PDF (parsed server-side with `pdf-parse`) and/or paste a
 webpage URL (fetched and its readable text extracted with a small
 dependency-free HTML-to-text helper, `lib/knowledge/extract-webpage-text.ts`
 — strips scripts/styles/nav/footer, decodes entities; not a full
-Readability-style parser, but enough for reference material). Either way
-the result is saved as `creators.knowledge_base_text` (capped at 40,000
-characters; adding a new one — PDF or URL — replaces whatever was there
-before, since this is a single reference document per creator, not a
-library). Whenever that
+Readability-style parser, but enough for reference material). Only the
+extracted plain text is ever kept — never the original file or page.
+
+Each addition **appends** to `creators.knowledge_base_text` rather than
+replacing it (`appendKnowledgeSource` in
+`app/dashboard/creators/knowledge-actions.ts`), separated by a `=== Source:
+<name> (added <date>) ===` header, so the knowledge base keeps growing as
+more PDFs/URLs are added — `knowledge_base_filename` tracks a running list
+of source labels shown on the page. Capped at a combined 40,000 characters;
+once that's hit, the *oldest* sections get trimmed from the front first so
+whatever was just added always survives intact. **Clear all** wipes the
+whole accumulated text (there's no per-source delete — it's one combined
+blob, not tracked as separate records — so removing just one source means
+clearing everything and re-adding the ones you want to keep). Whenever that
 creator is used for generation — manual Generate, or any Schedule pointed
 at them — the extracted text is folded into the prompt as reference
 material, with Claude instructed to draw on/revolve posts around it where
