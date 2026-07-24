@@ -442,8 +442,20 @@ Generate) or `'posted'`/`'failed'` (Schedules/cron — see Module 4).
 Drafts live at **Dashboard → Drafts** (`app/dashboard/drafts/page.tsx`):
 every generated post/thread, newest first, with its image if it has one,
 tagged with which creator's style it's based on and its status (draft /
-posted / failed, with the error shown for failed ones), plus **Copy**
-(clipboard) and **Delete** actions.
+posted / failed, with the error shown for failed ones), plus **Edit**,
+**Spin**, **Copy** (clipboard), and **Delete** actions.
+
+**Spin** (`app/dashboard/drafts/actions.ts` → `spinDraft`) generates a fresh
+rewrite of a still-unpublished draft using the same creator style, topic,
+niche, and role it was originally created with — no need to go back to the
+creator's page and start over. Click it to reveal a small textarea for an
+optional extra comment ("buat lebih lucu", "tambah statistik", "fokus pada
+masalah X"); that comment is folded into the Role instruction as additional
+direction for just this rewrite. Only `content_draft`/`text_attachment` are
+replaced — any image (AI-generated or uploaded) stays exactly as-is, so
+spinning the copy never burns another image-generation call or throws away
+an uploaded photo. Only available while a draft is still "draft" or
+"pending review", same restriction as Edit.
 
 ## Module 4: Auto-Posting (Official Threads API + Schedules)
 
