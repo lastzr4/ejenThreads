@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { publishThreadPosts, publishCarouselPost, ThreadsPartialPublishError } from "@/lib/threads/publish";
 import { getValidThreadsAccessToken } from "@/lib/scheduler/get-threads-token";
+import { generateStyledPost } from "@/lib/generation/generate-styled-post";
 
 export async function deleteDraft(formData: FormData) {
   const id = String(formData.get("id") ?? "");
@@ -89,6 +90,102 @@ export async function updateDraftContent(formData: FormData) {
 
   revalidatePath("/dashboard/drafts");
   redirect(`/dashboard/drafts?message=${encodeURIComponent("Draft updated")}`);
+}
+
+/**
+ * "Spin" — regenerates a fresh version of this draft's text (same creator
+ * style, same topic/niche/role it was originally generated with, plus an
+ * optional extra comment folded in as additional direction) without
+ * starting over from the creator's page. Only rewrites content_draft/
+ * text_attachment — the existing image (AI-made or uploaded) is left
+ * untouched on purpose, so spinning the copy doesn't burn another Gemini
+ * call or discard an image the user specifically uploaded. Only allowed on
+ * still-unpublished drafts, same as Edit.
+ */
+export async function spinDraft(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  const comment = String(formData.get("comment") ?? "").trim();
+  if (!id) return;
+
+  const supabase = createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data: draft } = await supabase
+    .from("scheduled_posts")
+    .select("id, creator_id, post_type, status, topic, niche, role_prompt, image_urls")
+    .eq("id", id)
+    .single();
+
+  if (!draft) {
+    redirect("/dashboard/drafts?error=Draft%20not%20found");
+  }
+
+  if (draft.status !== "draft" && draft.status !== "pending_review") {
+    redirect("/dashboard/drafts?error=" + encodeURIComponent("Only unpublished drafts can be spun"));
+  }
+
+  if (!draft.creator_id) {
+    redirect(
+      "/dashboard/drafts?error=" +
+        encodeURIComponent("This draft isn't linked to a creator anymore — can't regenerate it")
+    );
+  }
+
+  let errorMessage: string | null = null;
+
+  try {
+    const postType: "single" | "thread" | "carousel" =
+      draft.post_type === "carousel" ? "carousel" : draft.post_type === "thread" ? "thread" : "single";
+
+    // The extra comment is folded into the Role instruction — same
+    // mechanism a Role normally uses to override shape/framing — appended
+    // after any Role this draft already had, or standing on its own if it
+    // didn't have one.
+    const baseRole = (draft.role_prompt ?? "").trim();
+    const effectiveRole = comment
+      ? baseRole
+        ? `${baseRole}\n\nAdditional direction for this rewrite: ${comment}`
+        : `Additional direction for this rewrite: ${comment}`
+      : baseRole || undefined;
+
+    const carouselImageCount =
+      postType === "carousel" && Array.isArray(draft.image_urls) ? draft.image_urls.length : undefined;
+
+    const { posts, textAttachment } = await generateStyledPost({
+      supabase,
+      creatorId: draft.creator_id,
+      topic: draft.topic ?? undefined,
+      postType,
+      niche: draft.niche ?? undefined,
+      role: effectiveRole,
+      generateImage: false,
+      carouselImageCount
+    });
+
+    const { error: updateError } = await supabase
+      .from("scheduled_posts")
+      .update({
+        content_draft: posts,
+        text_attachment: textAttachment
+      })
+      .eq("id", id);
+
+    if (updateError) {
+      errorMessage = updateError.message;
+    }
+  } catch (err) {
+    errorMessage = err instanceof Error ? err.message : "Spin failed";
+  }
+
+  revalidatePath("/dashboard/drafts");
+  redirect(
+    errorMessage
+      ? `/dashboard/drafts?error=${encodeURIComponent(errorMessage)}`
+      : `/dashboard/drafts?message=${encodeURIComponent("Generated a fresh version")}`
+  );
 }
 
 /**

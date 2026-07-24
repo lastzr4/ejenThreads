@@ -120,6 +120,12 @@ export async function generatePost(formData: FormData) {
         image_error: imageError,
         uploaded_image: uploadedImage,
         text_attachment: textAttachment,
+        // Kept so the "Spin" button on Drafts (app/dashboard/drafts/actions.ts,
+        // spinDraft) can regenerate this same post later with the same
+        // topic/niche/role, plus whatever extra direction the user adds then.
+        topic: topic || null,
+        niche: niche || null,
+        role_prompt: role || null,
         status: "draft"
       });
 

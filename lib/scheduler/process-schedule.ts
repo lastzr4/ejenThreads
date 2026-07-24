@@ -124,6 +124,9 @@ export async function processSchedule(
         image_error: imageError,
         uploaded_image: usedFixedImage,
         text_attachment: textAttachment,
+        topic: schedule.topic ?? null,
+        niche: schedule.niche ?? null,
+        role_prompt: schedule.role_prompt ?? null,
         status: "pending_review"
       });
       if (insertError) throw new Error(insertError.message);
@@ -171,6 +174,9 @@ export async function processSchedule(
         image_error: imageError,
         uploaded_image: usedFixedImage,
         text_attachment: textAttachment,
+        topic: schedule.topic ?? null,
+        niche: schedule.niche ?? null,
+        role_prompt: schedule.role_prompt ?? null,
         status: "failed",
         threads_post_id: isPartial ? publishErr.rootId : null,
         error_message: publishErr instanceof Error ? publishErr.message : "Publish failed"
@@ -189,6 +195,9 @@ export async function processSchedule(
       image_error: imageError,
       uploaded_image: usedFixedImage,
       text_attachment: textAttachment,
+      topic: schedule.topic ?? null,
+      niche: schedule.niche ?? null,
+      role_prompt: schedule.role_prompt ?? null,
       status: "posted",
       threads_post_id: threadsPostId,
       posted_at: new Date().toISOString()

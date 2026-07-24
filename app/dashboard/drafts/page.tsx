@@ -7,6 +7,7 @@ import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { CopyDraftButton } from "@/components/copy-draft-button";
 import { EditDraftForm } from "@/components/edit-draft-form";
+import { SpinDraftForm } from "@/components/spin-draft-form";
 import { LocalDateTime } from "@/components/local-datetime";
 
 export default async function DraftsPage({
@@ -177,7 +178,7 @@ export default async function DraftsPage({
                   {draft.status === "failed" && draft.error_message && (
                     <p className="text-sm text-red-600">Error: {draft.error_message}</p>
                   )}
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-start gap-2">
                     {canPublish && (
                       <form action={approveAndPublishDraft}>
                         <input type="hidden" name="id" value={draft.id} />
@@ -186,6 +187,7 @@ export default async function DraftsPage({
                         </SubmitButton>
                       </form>
                     )}
+                    {canPublish && <SpinDraftForm id={draft.id} />}
                     <CopyDraftButton posts={posts} textAttachment={draft.text_attachment} />
                     <form action={deleteDraft}>
                       <input type="hidden" name="id" value={draft.id} />
