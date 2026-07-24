@@ -5,22 +5,74 @@ import { redirect } from "next/navigation";
 import pdfParse from "pdf-parse";
 import { createClient } from "@/lib/supabase/server";
 import { extractWebpageText } from "@/lib/knowledge/extract-webpage-text";
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 // Roughly ~40,000 characters is already far more than any single Claude
 // prompt needs as reference material (see how this gets used in
-// lib/generation/generate-styled-post.ts) — cap it so a huge PDF doesn't
-// blow out the prompt or the database row. Truncating (rather than
-// rejecting) still gives the AI most of the document to draw from.
+// lib/generation/generate-styled-post.ts) — cap the combined total so a
+// long history of added sources doesn't blow out the prompt or the
+// database row.
 const MAX_KNOWLEDGE_CHARS = 40000;
 
 /**
- * Per-creator "knowledge base": upload one PDF, extract its text, store it
- * on creators.knowledge_base_text. Re-uploading replaces the previous
- * document — this is a single reference doc per creator, not a library.
+ * Per-creator "knowledge base": upload PDFs and/or paste URLs, one at a
+ * time — each addition is appended below whatever's already there (not
+ * replaced), so the knowledge base keeps growing as more sources are added.
  * Wired into generation in lib/generation/generate-styled-post.ts, which
- * folds this text into the prompt as background material for posts to
- * reference/revolve around.
+ * folds the whole accumulated text into the prompt as background material.
+ *
+ * If the combined text would exceed MAX_KNOWLEDGE_CHARS, the OLDEST
+ * sections are trimmed from the front first — the newest addition (what
+ * the user just added) always survives intact; older history is what gets
+ * squeezed out once the cap is hit.
  */
+async function appendKnowledgeSource(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: SupabaseClient<any>,
+  creatorId: string,
+  sourceLabel: string,
+  newText: string
+): Promise<{ error: string | null }> {
+  const { data: existing } = await supabase
+    .from("creators")
+    .select("knowledge_base_text, knowledge_base_filename")
+    .eq("id", creatorId)
+    .maybeSingle();
+
+  const existingText = (existing?.knowledge_base_text as string | null) ?? "";
+  const existingLabel = (existing?.knowledge_base_filename as string | null) ?? "";
+
+  const addedAt = new Date().toISOString().slice(0, 10);
+  const newSection = `=== Source: ${sourceLabel} (added ${addedAt}) ===\n\n${newText.trim()}`;
+  let combinedText = existingText ? `${existingText}\n\n${newSection}` : newSection;
+
+  // Trim from the front (oldest sections first) if over the cap — keeps
+  // whatever was just added intact rather than truncating it away.
+  if (combinedText.length > MAX_KNOWLEDGE_CHARS) {
+    combinedText = combinedText.slice(combinedText.length - MAX_KNOWLEDGE_CHARS);
+    // Avoid starting mid-sentence in a chopped-off section — cut back to
+    // the next section boundary if one exists nearby.
+    const boundary = combinedText.indexOf("=== Source:");
+    if (boundary > 0 && boundary < 2000) {
+      combinedText = combinedText.slice(boundary);
+    }
+  }
+
+  const combinedLabel = existingLabel ? `${existingLabel} • ${sourceLabel}` : sourceLabel;
+
+  const { error } = await supabase
+    .from("creators")
+    .update({
+      knowledge_base_text: combinedText,
+      knowledge_base_filename: combinedLabel,
+      knowledge_base_updated_at: new Date().toISOString()
+    })
+    .eq("id", creatorId);
+
+  return { error: error?.message ?? null };
+}
+
 export async function uploadKnowledgeBase(formData: FormData) {
   const creatorId = String(formData.get("creatorId") ?? "");
   const file = formData.get("knowledgeFile");
@@ -54,20 +106,8 @@ export async function uploadKnowledgeBase(formData: FormData) {
       throw new Error("Couldn't extract any text from that PDF — it may be scanned images without OCR text");
     }
 
-    const truncated = text.length > MAX_KNOWLEDGE_CHARS ? text.slice(0, MAX_KNOWLEDGE_CHARS) : text;
-
-    const { error: updateError } = await supabase
-      .from("creators")
-      .update({
-        knowledge_base_text: truncated,
-        knowledge_base_filename: pdfFile.name,
-        knowledge_base_updated_at: new Date().toISOString()
-      })
-      .eq("id", creatorId);
-
-    if (updateError) {
-      errorMessage = updateError.message;
-    }
+    const { error } = await appendKnowledgeSource(supabase, creatorId, pdfFile.name, text);
+    if (error) errorMessage = error;
   } catch (err) {
     errorMessage = err instanceof Error ? err.message : "Failed to read PDF";
   }
@@ -76,18 +116,16 @@ export async function uploadKnowledgeBase(formData: FormData) {
   redirect(
     errorMessage
       ? `/dashboard/creators/${creatorId}?error=${encodeURIComponent(errorMessage)}`
-      : `/dashboard/creators/${creatorId}?message=${encodeURIComponent("Knowledge base updated")}`
+      : `/dashboard/creators/${creatorId}?message=${encodeURIComponent("Added to knowledge base")}`
   );
 }
 
 /**
  * Alternative to uploadKnowledgeBase — paste a webpage URL instead of a
  * PDF file. Fetches the page server-side, extracts its readable text
- * (lib/knowledge/extract-webpage-text.ts), and stores it the same way a
- * PDF would be: same creators.knowledge_base_text column, same 40,000-
- * character cap, same "replaces whatever was there before" behavior. Either
- * source feeds the exact same downstream generation logic — the creator's
- * knowledge base doesn't track or care which way its current text arrived.
+ * (lib/knowledge/extract-webpage-text.ts), and appends it the same way a
+ * PDF would be (see appendKnowledgeSource) — nothing gets stored except
+ * the extracted plain text, never the page/file itself.
  */
 export async function addKnowledgeBaseFromUrl(formData: FormData) {
   const creatorId = String(formData.get("creatorId") ?? "");
@@ -108,20 +146,9 @@ export async function addKnowledgeBaseFromUrl(formData: FormData) {
 
   try {
     const { title, text } = await extractWebpageText(url);
-    const truncated = text.length > MAX_KNOWLEDGE_CHARS ? text.slice(0, MAX_KNOWLEDGE_CHARS) : text;
-
-    const { error: updateError } = await supabase
-      .from("creators")
-      .update({
-        knowledge_base_text: truncated,
-        knowledge_base_filename: title ? `${title} (${url})` : url,
-        knowledge_base_updated_at: new Date().toISOString()
-      })
-      .eq("id", creatorId);
-
-    if (updateError) {
-      errorMessage = updateError.message;
-    }
+    const label = title ? `${title} (${url})` : url;
+    const { error } = await appendKnowledgeSource(supabase, creatorId, label, text);
+    if (error) errorMessage = error;
   } catch (err) {
     errorMessage = err instanceof Error ? err.message : "Failed to read that URL";
   }
@@ -130,10 +157,16 @@ export async function addKnowledgeBaseFromUrl(formData: FormData) {
   redirect(
     errorMessage
       ? `/dashboard/creators/${creatorId}?error=${encodeURIComponent(errorMessage)}`
-      : `/dashboard/creators/${creatorId}?message=${encodeURIComponent("Knowledge base updated from URL")}`
+      : `/dashboard/creators/${creatorId}?message=${encodeURIComponent("Added to knowledge base")}`
   );
 }
 
+/**
+ * Wipes the whole accumulated knowledge base for this creator — the only
+ * way to remove a specific source is to clear everything and re-add the
+ * ones you want to keep (there's no per-source delete, since the text is
+ * just one combined blob, not tracked as separate records).
+ */
 export async function clearKnowledgeBase(formData: FormData) {
   const creatorId = String(formData.get("creatorId") ?? "");
   if (!creatorId) return;
@@ -153,5 +186,5 @@ export async function clearKnowledgeBase(formData: FormData) {
   }
 
   revalidatePath(`/dashboard/creators/${creatorId}`);
-  redirect(`/dashboard/creators/${creatorId}?message=${encodeURIComponent("Knowledge base removed")}`);
+  redirect(`/dashboard/creators/${creatorId}?message=${encodeURIComponent("Knowledge base cleared")}`);
 }

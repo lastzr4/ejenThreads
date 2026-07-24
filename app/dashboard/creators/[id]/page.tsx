@@ -140,25 +140,32 @@ export default async function CreatorDetailPage({
         <CardHeader>
           <CardTitle className="text-base">Knowledge base (optional)</CardTitle>
           <CardDescription>
-            Upload a PDF, or paste a webpage URL, for this creator — AI reads it and generated posts can
-            draw on and revolve around its content (e.g. a product catalog, an ebook, a set of notes, an
-            article). Adding a new one replaces whatever was there before — this holds one reference
-            source per creator, not a library.
+            Upload PDFs and/or paste webpage URLs, one at a time — each one adds to this creator&apos;s
+            knowledge base rather than replacing it, so it keeps growing as you add more. Only the
+            extracted text is kept, never the file/page itself. AI reads all of it and generated posts
+            can draw on and revolve around the combined content.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {creator.knowledge_base_filename ? (
-            <div className="flex items-center justify-between gap-3 rounded-md border border-slate-100 bg-slate-50 p-3 text-sm">
+            <div className="flex items-start justify-between gap-3 rounded-md border border-slate-100 bg-slate-50 p-3 text-sm">
               <div>
-                <p className="font-medium text-slate-700 break-all">{creator.knowledge_base_filename}</p>
-                <p className="text-xs text-slate-500">
-                  Updated <LocalDateTime iso={creator.knowledge_base_updated_at} />
+                <p className="font-medium text-slate-700">Sources added so far:</p>
+                <ul className="mt-1 list-disc space-y-0.5 pl-4 text-slate-600">
+                  {creator.knowledge_base_filename.split(" • ").map((label: string, i: number) => (
+                    <li key={i} className="break-all">
+                      {label}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-1 text-xs text-slate-500">
+                  Last updated <LocalDateTime iso={creator.knowledge_base_updated_at} />
                 </p>
               </div>
               <form action={clearKnowledgeBase}>
                 <input type="hidden" name="creatorId" value={creator.id} />
                 <Button variant="ghost" size="sm" type="submit">
-                  Remove
+                  Clear all
                 </Button>
               </form>
             </div>
@@ -175,7 +182,7 @@ export default async function CreatorDetailPage({
               className="block flex-1 text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
             />
             <SubmitButton size="sm" pendingText="Reading PDF…">
-              {creator.knowledge_base_filename ? "Replace with PDF" : "Upload PDF"}
+              Add PDF
             </SubmitButton>
           </form>
           <div className="flex items-center gap-2 text-xs text-slate-400">
@@ -193,7 +200,7 @@ export default async function CreatorDetailPage({
               className="w-full flex-1 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
             />
             <SubmitButton size="sm" pendingText="Fetching page…">
-              {creator.knowledge_base_filename ? "Replace with URL" : "Fetch URL"}
+              Add URL
             </SubmitButton>
           </form>
         </CardContent>
