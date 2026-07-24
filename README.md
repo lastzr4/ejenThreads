@@ -393,6 +393,34 @@ just following generic style. Not required — creators with no knowledge
 base generate exactly as before. Remove it any time with the **Remove**
 button next to the uploaded filename.
 
+**Carousel** (Format option, alongside Single post / Thread): a single
+Threads post with 2-20 swipeable images and one shared caption — a
+genuinely different Threads API shape from a thread (no reply chain;
+`lib/threads/publish.ts`'s `publishCarouselPost` does Meta's real 3-step
+carousel flow: one `IMAGE` container per photo with `is_carousel_item=true`,
+then a `CAROUSEL` container bundling their ids plus the caption, then
+publish). Images can come from either source, same "uploaded overrides AI"
+priority as the single-image case:
+
+- **Upload your own** (2-20 files) — available on both Generate post
+  (`carouselImages` field) and Schedules (uploaded once at creation time,
+  reused every run via `posting_schedules.fixed_image_urls`, same idea as
+  `fixed_image_url` for single/thread).
+- **AI-generate** — pick how many (2-10) and Claude writes that many
+  distinct-but-cohesive `image_prompts` (e.g. a before/after pair, steps in
+  a process, different angles of a product) alongside the one caption; each
+  prompt is sent to Gemini and uploaded independently and in parallel
+  (`Promise.allSettled`), so one bad prompt or transient failure doesn't
+  sink the whole set — as long as at least 2 succeed, the carousel still
+  publishes with however many came through.
+
+A carousel draft/schedule run that ends up with fewer than 2 usable images
+(all uploads/generations failed, or too few were supplied) fails loudly
+with an explanatory error rather than saving something that could never
+actually publish. Stored as `post_type: 'carousel'`,
+`scheduled_posts.image_urls` (the array; `image_url` stays null), and the
+Drafts page shows a thumbnail grid instead of one big image for these.
+
 The result is saved into `scheduled_posts` with `status: 'draft'` (manual
 Generate) or `'posted'`/`'failed'` (Schedules/cron — see Module 4).
 
