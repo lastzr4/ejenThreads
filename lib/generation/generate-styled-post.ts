@@ -42,9 +42,20 @@ const GENERATE_TOOL = {
       image_prompt: {
         type: "string",
         description:
-          "Only include this if an accompanying image was requested (see instructions). A vivid, " +
-          "concrete English description for an image generator — describe a real photo-style scene " +
-          "(product shot, lifestyle photo, etc.) that fits the post. Omit entirely if no image was requested."
+          "Only for a single accompanying image (postType is single or thread, not carousel) if one was " +
+          "requested (see instructions). A vivid, concrete English description for an image generator — " +
+          "describe a real photo-style scene (product shot, lifestyle photo, etc.) that fits the post. " +
+          "Omit entirely if no image was requested, or if this is a carousel (use image_prompts instead)."
+      },
+      image_prompts: {
+        type: "array",
+        items: { type: "string" },
+        description:
+          "Only for a carousel post (postType carousel) if images were requested — the exact number of " +
+          "distinct, vivid English photo descriptions asked for in the instructions, one per carousel " +
+          "image, ordered the way they should appear when a reader swipes through (e.g. a before/after " +
+          "sequence, steps in a process, different angles of a product). Each should be visually distinct " +
+          "but thematically cohesive with the others. Omit entirely if not a carousel or no image was requested."
       }
     },
     required: ["topic_used", "posts"]
@@ -56,9 +67,18 @@ export interface GenerateStyledPostParams {
   supabase: SupabaseClient<Database> | SupabaseClient<any>;
   creatorId: string;
   topic?: string;
-  postType: "single" | "thread";
+  postType: "single" | "thread" | "carousel";
   niche?: string | null;
   generateImage?: boolean;
+  /**
+   * How many AI images to generate when postType is "carousel" and
+   * generateImage is true. Ignored otherwise (single/thread only ever
+   * generate one image). Threads allows 2-20 images in a real carousel;
+   * this is clamped by the caller (see app/dashboard/creators/generate-
+   * actions.ts and app/dashboard/schedules/actions.ts) before reaching
+   * here, but defaults conservatively if omitted.
+   */
+  carouselImageCount?: number;
   /**
    * Free-text persona/format instruction, e.g. "This account is a
    * professional writer who publishes short creative fiction (cerpen),
@@ -77,11 +97,20 @@ export interface GenerateStyledPostResult {
   creatorUsername: string | null;
   imageUrl: string | null;
   /**
+   * Set only for a carousel (postType === "carousel") when AI image
+   * generation was requested — 2+ image URLs, one per carousel slide, in
+   * the order Claude described them. Null otherwise (including when a
+   * carousel's images all failed to generate — see imageError).
+   */
+  imageUrls: string[] | null;
+  /**
    * Set whenever an image was requested but generation/upload failed —
    * previously this was silently discarded (caught, imageUrl left null, no
    * trace anywhere), which made "the image just never shows up" impossible
    * to diagnose without direct server log access. Null when no image was
-   * requested, or when it succeeded.
+   * requested, or when it succeeded. For a carousel, also set (as a
+   * partial warning, not necessarily fatal) if some but not all images
+   * failed.
    */
   imageError: string | null;
   /**
@@ -112,7 +141,8 @@ export async function generateStyledPost({
   postType,
   niche,
   role,
-  generateImage: wantsImage = false
+  generateImage: wantsImage = false,
+  carouselImageCount = 3
 }: GenerateStyledPostParams): Promise<GenerateStyledPostResult> {
   const { data: creator } = await supabase
     .from("creators")
@@ -161,10 +191,22 @@ export async function generateStyledPost({
   const wantsAffiliateHookFormat =
     !hasRole && (isAffiliateNiche || /https?:\/\/|\.com|\.my|shopee|tiktok/i.test(topic ?? ""));
   const hasLinksToTag = isAffiliateNiche || /https?:\/\/|\.com|\.my|shopee|tiktok/i.test(topic ?? "");
+  // 2-20 mirrors publishCarouselPost's own limits (lib/threads/publish.ts) —
+  // clamped here too as a safety net in case a caller passes something out
+  // of range instead of clamping it themselves.
+  const carouselCount = postType === "carousel" ? Math.min(20, Math.max(2, carouselImageCount)) : 0;
+
+  const postTypeLabel =
+    postType === "thread" ? "thread (multiple sequential posts)" : postType === "carousel" ? "carousel post" : "post";
 
   const userPrompt =
-    `Write a brand-new, original Threads ${postType === "thread" ? "thread (multiple sequential posts)" : "post"} ` +
+    `Write a brand-new, original Threads ${postTypeLabel} ` +
     `in the voice of @${creator?.username ?? "this creator"}, based on the style profile below.\n\n` +
+    (postType === "carousel"
+      ? `This will be published as a single Threads carousel — ${carouselCount} images the reader swipes ` +
+        `through, all under ONE shared caption. Write exactly one caption (a single item in "posts"), not a ` +
+        `split thread — the images themselves carry the multi-part structure, not separate reply posts.\n\n`
+      : "") +
     `STYLE PROFILE:\n` +
     `Tone: ${analysis.style_tone}\n` +
     `Hook patterns: ${JSON.stringify(analysis.hook_patterns)}\n` +
@@ -186,14 +228,17 @@ export async function generateStyledPost({
         (postType === "thread"
           ? `Use as many sequential posts as the story/format genuinely needs — not limited to 2-3 if a ` +
             `fuller narrative arc calls for more.\n\n`
-          : `Prefer a SINGLE post if the content comfortably fits under ~450 characters — just write the ` +
-            `whole thing in "posts" as one item. But if this role/format genuinely needs more room (e.g. a ` +
-            `full short story), do NOT cram it into one post or cut it short. Instead write it as a natural ` +
-            `sequence: the first post stands alone, and each following part continues as a reply/comment on ` +
-            `the previous one (same mechanism as a thread) — return each part as its own item in "posts", ` +
-            `each under ~450 characters, in reading order. The reader experiences it as one continuous post ` +
-            `followed by its own comment thread, so keep each part self-contained enough to read naturally ` +
-            `as a continuation rather than a jarring cut.\n\n`)
+          : postType === "carousel"
+            ? `Write the single shared caption for this carousel — do not split it into multiple posts or a ` +
+              `reply chain; the ${carouselCount} images carry the multi-part structure instead.\n\n`
+            : `Prefer a SINGLE post if the content comfortably fits under ~450 characters — just write the ` +
+              `whole thing in "posts" as one item. But if this role/format genuinely needs more room (e.g. a ` +
+              `full short story), do NOT cram it into one post or cut it short. Instead write it as a natural ` +
+              `sequence: the first post stands alone, and each following part continues as a reply/comment on ` +
+              `the previous one (same mechanism as a thread) — return each part as its own item in "posts", ` +
+              `each under ~450 characters, in reading order. The reader experiences it as one continuous post ` +
+              `followed by its own comment thread, so keep each part self-contained enough to read naturally ` +
+              `as a continuation rather than a jarring cut.\n\n`)
       : "") +
     (nicheDescription ? `Niche/category to write within: ${nicheDescription}\n\n` : "") +
     (topic
@@ -215,8 +260,13 @@ export async function generateStyledPost({
           `reproduce links that were actually given in the topic text.\n\n`
         : "") +
     (wantsImage
-      ? `An accompanying image was requested — also include image_prompt: a vivid English description of a ` +
-        `realistic photo (product shot or lifestyle scene) that fits this post.\n\n`
+      ? postType === "carousel"
+        ? `${carouselCount} accompanying images were requested — include image_prompts: exactly ${carouselCount} ` +
+          `vivid English photo descriptions, one per carousel slide, in swipe order (e.g. a before/after pair, ` +
+          `steps in a process, or different angles/moments of the same product or scene) — distinct from each ` +
+          `other but visually cohesive as a set.\n\n`
+        : `An accompanying image was requested — also include image_prompt: a vivid English description of a ` +
+          `realistic photo (product shot or lifestyle scene) that fits this post.\n\n`
       : "") +
     `Call record_generated_post with the result.`;
 
@@ -248,6 +298,7 @@ export async function generateStyledPost({
     posts?: string[];
     text_attachment?: string;
     image_prompt?: string;
+    image_prompts?: string[];
   };
   const posts = Array.isArray(result.posts) ? result.posts.filter((p) => typeof p === "string" && p.trim()) : [];
 
@@ -264,8 +315,50 @@ export async function generateStyledPost({
       : null;
 
   let imageUrl: string | null = null;
+  let imageUrls: string[] | null = null;
   let imageError: string | null = null;
-  if (wantsImage) {
+
+  if (wantsImage && postType === "carousel") {
+    const prompts = Array.isArray(result.image_prompts)
+      ? result.image_prompts.filter((p) => typeof p === "string" && p.trim())
+      : [];
+
+    if (prompts.length < 2) {
+      imageError = `A carousel needs at least 2 images, but Claude only returned ${prompts.length} image_prompts`;
+    } else {
+      // Each image is generated (Gemini) and uploaded independently, in
+      // parallel — one bad prompt/transient failure shouldn't sink the
+      // whole carousel. As long as at least 2 succeed, the carousel still
+      // publishes with fewer slides than asked for (Threads' own minimum);
+      // imageError reports how many were skipped either way.
+      const settled = await Promise.allSettled(
+        prompts.map(async (prompt) => {
+          const { buffer, contentType } = await generateImage(prompt);
+          return uploadGeneratedImage(buffer, contentType);
+        })
+      );
+      const urls = settled
+        .filter((s): s is PromiseFulfilledResult<string> => s.status === "fulfilled")
+        .map((s) => s.value);
+      const failedCount = settled.length - urls.length;
+
+      if (failedCount > 0) {
+        console.error(
+          `[generateStyledPost] ${failedCount} of ${settled.length} carousel images failed:`,
+          settled.filter((s) => s.status === "rejected")
+        );
+      }
+
+      if (urls.length >= 2) {
+        imageUrls = urls;
+        if (failedCount > 0) {
+          imageError = `${failedCount} of ${settled.length} carousel images failed to generate and were skipped.`;
+        }
+      } else {
+        imageError = `Carousel image generation mostly failed (only ${urls.length} of ${settled.length} succeeded) — need at least 2.`;
+      }
+    }
+  } else if (wantsImage) {
     if (!result.image_prompt) {
       // Shouldn't normally happen since wantsImage adds an instruction to
       // include image_prompt, but Claude can still omit it.
@@ -285,5 +378,5 @@ export async function generateStyledPost({
     }
   }
 
-  return { posts, creatorUsername: creator?.username ?? null, imageUrl, imageError, textAttachment };
+  return { posts, creatorUsername: creator?.username ?? null, imageUrl, imageUrls, imageError, textAttachment };
 }

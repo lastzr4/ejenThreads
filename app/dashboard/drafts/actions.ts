@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { publishThreadPosts, ThreadsPartialPublishError } from "@/lib/threads/publish";
+import { publishThreadPosts, publishCarouselPost, ThreadsPartialPublishError } from "@/lib/threads/publish";
 import { getValidThreadsAccessToken } from "@/lib/scheduler/get-threads-token";
 
 export async function deleteDraft(formData: FormData) {
@@ -41,7 +41,7 @@ export async function updateDraftContent(formData: FormData) {
 
   const { data: draft } = await supabase
     .from("scheduled_posts")
-    .select("id, status")
+    .select("id, status, post_type")
     .eq("id", id)
     .single();
 
@@ -69,11 +69,16 @@ export async function updateDraftContent(formData: FormData) {
   const textAttachment =
     typeof textAttachmentRaw === "string" && textAttachmentRaw.trim() ? textAttachmentRaw.trim() : null;
 
+  // A carousel's post_type must stay "carousel" regardless of how many
+  // caption items get edited here (it's a single caption, not a thread) —
+  // only single/thread ever get recomputed from the edited post count.
+  const post_type = draft.post_type === "carousel" ? "carousel" : posts.length > 1 ? "thread" : "single";
+
   const { error } = await supabase
     .from("scheduled_posts")
     .update({
       content_draft: posts,
-      post_type: posts.length > 1 ? "thread" : "single",
+      post_type,
       text_attachment: textAttachment
     })
     .eq("id", id);
@@ -131,7 +136,7 @@ export async function approveAndPublishDraft(formData: FormData) {
 
   const { data: draft } = await supabase
     .from("scheduled_posts")
-    .select("id, user_id, content_draft, image_url, text_attachment, status")
+    .select("id, user_id, content_draft, image_url, image_urls, text_attachment, status, post_type")
     .eq("id", id)
     .single();
 
@@ -159,13 +164,11 @@ export async function approveAndPublishDraft(formData: FormData) {
       throw new Error("No post text saved on this draft — nothing to publish");
     }
 
-    const threadsPostId = await publishThreadPosts(
-      threadsUserId,
-      accessToken,
-      posts,
-      draft.image_url,
-      draft.text_attachment
-    );
+    const imageUrls = Array.isArray(draft.image_urls) ? (draft.image_urls as string[]) : [];
+    const threadsPostId =
+      draft.post_type === "carousel"
+        ? await publishCarouselPost(threadsUserId, accessToken, posts[0] ?? "", imageUrls)
+        : await publishThreadPosts(threadsUserId, accessToken, posts, draft.image_url, draft.text_attachment);
 
     await supabase
       .from("scheduled_posts")

@@ -11,7 +11,9 @@ const ALLOWED_INTERVALS = [1, 2, 4, 6, 12, 24];
 export async function createSchedule(formData: FormData) {
   const creatorId = String(formData.get("creatorId") ?? "");
   const intervalHours = Number(formData.get("intervalHours"));
-  const postType = formData.get("postType") === "thread" ? "thread" : "single";
+  const rawPostType = formData.get("postType");
+  const postType: "single" | "thread" | "carousel" =
+    rawPostType === "thread" ? "thread" : rawPostType === "carousel" ? "carousel" : "single";
   const topic = String(formData.get("topic") ?? "").trim();
   const niche = String(formData.get("niche") ?? "").trim();
   const role = String(formData.get("role") ?? "").trim();
@@ -21,10 +23,26 @@ export async function createSchedule(formData: FormData) {
   // in formData at all when checked, so absence means "off" here.
   const requireApproval = formData.get("requireApproval") === "on";
   const fixedImageFile = formData.get("fixedImage");
-  const hasFixedImage = fixedImageFile instanceof File && fixedImageFile.size > 0;
+  const hasFixedImage = postType !== "carousel" && fixedImageFile instanceof File && fixedImageFile.size > 0;
+
+  // Carousel-only fields — ignored entirely unless postType is "carousel".
+  const carouselImageFiles = formData
+    .getAll("carouselImages")
+    .filter((f): f is File => f instanceof File && f.size > 0);
+  const hasCarouselUploads = postType === "carousel" && carouselImageFiles.length > 0;
+  const carouselImageCountRaw = Number(formData.get("carouselImageCount"));
+  const carouselImageCount = Number.isFinite(carouselImageCountRaw)
+    ? Math.min(10, Math.max(2, Math.round(carouselImageCountRaw)))
+    : 3;
 
   if (!creatorId || !ALLOWED_INTERVALS.includes(intervalHours)) {
     redirect("/dashboard/schedules?error=Pick+a+creator+and+a+valid+interval");
+  }
+  if (postType === "carousel" && hasCarouselUploads && carouselImageFiles.length < 2) {
+    redirect("/dashboard/schedules?error=" + encodeURIComponent("A carousel needs at least 2 uploaded images"));
+  }
+  if (postType === "carousel" && carouselImageFiles.length > 20) {
+    redirect("/dashboard/schedules?error=" + encodeURIComponent("A carousel can have at most 20 images"));
   }
 
   const supabase = createClient();
@@ -47,10 +65,11 @@ export async function createSchedule(formData: FormData) {
   }
 
   // Uploaded once here at schedule-creation time (not per-run) — a schedule
-  // recurs with no file to re-upload each tick, so the same public URL is
-  // just reused by every future run instead (see fixed_image_url handling
-  // in lib/scheduler/process-schedule.ts).
+  // recurs with no file to re-upload each tick, so the same public URL(s)
+  // are just reused by every future run instead (see fixed_image_url /
+  // fixed_image_urls handling in lib/scheduler/process-schedule.ts).
   let fixedImageUrl: string | null = null;
+  let fixedImageUrls: string[] | null = null;
   if (hasFixedImage) {
     try {
       const file = fixedImageFile as File;
@@ -61,6 +80,23 @@ export async function createSchedule(formData: FormData) {
         "/dashboard/schedules?error=" +
           encodeURIComponent(
             "Fixed image upload failed: " + (err instanceof Error ? err.message : "unknown error")
+          )
+      );
+    }
+  }
+  if (hasCarouselUploads) {
+    try {
+      const urls: string[] = [];
+      for (const file of carouselImageFiles) {
+        const buffer = Buffer.from(await file.arrayBuffer());
+        urls.push(await uploadGeneratedImage(buffer, file.type || "image/jpeg"));
+      }
+      fixedImageUrls = urls;
+    } catch (err) {
+      redirect(
+        "/dashboard/schedules?error=" +
+          encodeURIComponent(
+            "Carousel image upload failed: " + (err instanceof Error ? err.message : "unknown error")
           )
       );
     }
@@ -76,6 +112,8 @@ export async function createSchedule(formData: FormData) {
     role_prompt: role || null,
     generate_image: generateImage,
     fixed_image_url: fixedImageUrl,
+    fixed_image_urls: fixedImageUrls,
+    carousel_image_count: carouselImageCount,
     require_approval: requireApproval,
     next_run_at: new Date().toISOString()
   });
@@ -138,7 +176,7 @@ export async function runScheduleNow(formData: FormData) {
   const { data: schedule } = await supabase
     .from("posting_schedules")
     .select(
-      "id, user_id, creator_id, interval_hours, post_type, topic, niche, role_prompt, generate_image, fixed_image_url, require_approval"
+      "id, user_id, creator_id, interval_hours, post_type, topic, niche, role_prompt, generate_image, fixed_image_url, fixed_image_urls, carousel_image_count, require_approval"
     )
     .eq("id", id)
     .single();

@@ -226,6 +226,7 @@ export default async function CreatorDetailPage({
                   >
                     <option value="single">Single post</option>
                     <option value="thread">Thread</option>
+                    <option value="carousel">Carousel (multi-image)</option>
                   </select>
                 </div>
               </div>
@@ -244,7 +245,8 @@ export default async function CreatorDetailPage({
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-600">
-                  Upload your own image (optional) — used instead of AI generation if provided
+                  Upload your own image (optional, Single/Thread only) — used instead of AI generation if
+                  provided
                 </label>
                 <input
                   type="file"
@@ -253,10 +255,41 @@ export default async function CreatorDetailPage({
                   className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
                 />
               </div>
+              <div className="rounded-md border border-slate-100 bg-slate-50 p-3 space-y-3">
+                <p className="text-xs font-medium text-slate-600">Carousel format only (ignored otherwise)</p>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">
+                    Upload your own images (2-20) — used instead of AI generation if provided
+                  </label>
+                  <input
+                    type="file"
+                    name="carouselImages"
+                    accept="image/*"
+                    multiple
+                    className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">
+                    Number of AI images to generate (if not uploading your own above)
+                  </label>
+                  <select
+                    name="carouselImageCount"
+                    defaultValue="3"
+                    className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400 sm:w-40"
+                  >
+                    {[2, 3, 4, 5, 6, 8, 10].map((n) => (
+                      <option key={n} value={n}>
+                        {n} images
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <label className="flex items-center gap-2 text-sm text-slate-600">
                   <input type="checkbox" name="generateImage" className="rounded border-slate-300" />
-                  Generate an image too (AI, via Gemini — free, ignored if you upload your own above)
+                  Generate image(s) with AI (Gemini — free; ignored if you uploaded your own above)
                 </label>
                 <SubmitButton pendingText="Generating…">Generate post</SubmitButton>
               </div>

@@ -19,7 +19,7 @@ export default async function DraftsPage({
   const { data: drafts } = await supabase
     .from("scheduled_posts")
     .select(
-      "id, post_type, content_draft, image_url, image_error, uploaded_image, text_attachment, status, error_message, threads_post_id, created_at, creators(username)"
+      "id, post_type, content_draft, image_url, image_urls, image_error, uploaded_image, text_attachment, status, error_message, threads_post_id, created_at, creators(username)"
     )
     .order("created_at", { ascending: false });
 
@@ -80,7 +80,11 @@ export default async function DraftsPage({
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base">
-                      {draft.post_type === "thread" ? `Thread (${posts.length} posts)` : "Single post"}
+                      {draft.post_type === "carousel"
+                        ? `Carousel (${Array.isArray(draft.image_urls) ? draft.image_urls.length : 0} images)`
+                        : draft.post_type === "thread"
+                          ? `Thread (${posts.length} posts)`
+                          : "Single post"}
                     </CardTitle>
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs ${
@@ -104,18 +108,38 @@ export default async function DraftsPage({
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {draft.image_url && (
+                  {draft.post_type === "carousel" && Array.isArray(draft.image_urls) && draft.image_urls.length > 0 ? (
                     <div className="space-y-1">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={draft.image_url}
-                        alt={draft.uploaded_image ? "Uploaded by you" : "AI-generated"}
-                        className="max-h-64 w-full rounded-md border border-slate-100 object-cover"
-                      />
+                      <div className="grid grid-cols-3 gap-1 sm:grid-cols-4">
+                        {(draft.image_urls as string[]).map((url, i) => (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            key={i}
+                            src={url}
+                            alt={`Carousel image ${i + 1}`}
+                            className="aspect-square w-full rounded-md border border-slate-100 object-cover"
+                          />
+                        ))}
+                      </div>
                       <p className="text-xs text-slate-400">
-                        {draft.uploaded_image ? "Uploaded by you" : "AI-generated"}
+                        {draft.uploaded_image ? "Uploaded by you" : "AI-generated"} ·{" "}
+                        {(draft.image_urls as string[]).length} images
                       </p>
                     </div>
+                  ) : (
+                    draft.image_url && (
+                      <div className="space-y-1">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={draft.image_url}
+                          alt={draft.uploaded_image ? "Uploaded by you" : "AI-generated"}
+                          className="max-h-64 w-full rounded-md border border-slate-100 object-cover"
+                        />
+                        <p className="text-xs text-slate-400">
+                          {draft.uploaded_image ? "Uploaded by you" : "AI-generated"}
+                        </p>
+                      </div>
+                    )
                   )}
                   {draft.image_error && (
                     <p className="text-sm text-amber-600">Image generation failed: {draft.image_error}</p>

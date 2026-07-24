@@ -240,6 +240,84 @@ async function publishContainer(threadsUserId: string, accessToken: string, cont
   return data.id as string;
 }
 
+async function createCarouselItemContainer(
+  threadsUserId: string,
+  accessToken: string,
+  imageUrl: string
+): Promise<string> {
+  const body = new URLSearchParams({
+    media_type: "IMAGE",
+    image_url: imageUrl,
+    is_carousel_item: "true",
+    access_token: accessToken
+  });
+  const res = await fetch(`${GRAPH_BASE}/${threadsUserId}/threads`, { method: "POST", body });
+  const data = await res.json();
+  if (!res.ok || !data.id) {
+    throw new ThreadsApiError(
+      data?.error?.message || data?.error_message || "Failed to create a carousel image container"
+    );
+  }
+  return data.id as string;
+}
+
+async function createCarouselContainer(
+  threadsUserId: string,
+  accessToken: string,
+  childIds: string[],
+  caption: string
+): Promise<string> {
+  const body = new URLSearchParams({
+    media_type: "CAROUSEL",
+    children: childIds.join(","),
+    access_token: accessToken
+  });
+  if (caption) body.set("text", caption);
+
+  const res = await fetch(`${GRAPH_BASE}/${threadsUserId}/threads`, { method: "POST", body });
+  const data = await res.json();
+  if (!res.ok || !data.id) {
+    throw new ThreadsApiError(data?.error?.message || data?.error_message || "Failed to create carousel container");
+  }
+  return data.id as string;
+}
+
+/**
+ * Publishes a Threads carousel post — 2 to 20 images swiped through in a
+ * single post with one shared caption. Three-step process per Meta's docs
+ * (developers.facebook.com/docs/threads/posts#carousel-posts): create an
+ * individual IMAGE container per photo with is_carousel_item=true, bundle
+ * all their ids into one CAROUSEL container along with the caption, then
+ * publish that container. Unlike publishThreadPosts, there's no reply
+ * chain and nothing goes live until the final publish call — a carousel is
+ * genuinely one post, so there's no partial-publish state to worry about
+ * (see ThreadsPartialPublishError, which doesn't apply here).
+ */
+export async function publishCarouselPost(
+  threadsUserId: string,
+  accessToken: string,
+  caption: string,
+  imageUrls: string[]
+): Promise<string> {
+  if (imageUrls.length < 2) {
+    throw new ThreadsApiError("A carousel needs at least 2 images");
+  }
+  if (imageUrls.length > 20) {
+    throw new ThreadsApiError("A carousel can have at most 20 images");
+  }
+
+  const childIds: string[] = [];
+  for (const imageUrl of imageUrls) {
+    const id = await createCarouselItemContainer(threadsUserId, accessToken, imageUrl);
+    await waitForContainerReady(id, accessToken);
+    childIds.push(id);
+  }
+
+  const carouselContainerId = await createCarouselContainer(threadsUserId, accessToken, childIds, caption);
+  await waitForContainerReady(carouselContainerId, accessToken);
+  return publishContainer(threadsUserId, accessToken, carouselContainerId);
+}
+
 /**
  * Publishes one or more posts as a Threads thread: the first post stands
  * alone, and each subsequent post is chained as a reply to the previous

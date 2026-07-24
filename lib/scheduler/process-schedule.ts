@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
 import { generateStyledPost } from "@/lib/generation/generate-styled-post";
-import { publishThreadPosts, ThreadsPartialPublishError } from "@/lib/threads/publish";
+import { publishThreadPosts, publishCarouselPost, ThreadsPartialPublishError } from "@/lib/threads/publish";
 import { getValidThreadsAccessToken } from "@/lib/scheduler/get-threads-token";
 
 // Shared by both the cron tick (app/api/cron/run-schedules, iterates every
@@ -29,6 +29,17 @@ export interface ScheduleRow {
    * gets attached to every post. Takes priority over generate_image when set.
    */
   fixed_image_url?: string | null;
+  /**
+   * Same idea as fixed_image_url, but for a carousel schedule (post_type
+   * "carousel") — 2-20 uploaded image URLs, set once at schedule-creation
+   * time, reused as-is on every run instead of AI generation.
+   */
+  fixed_image_urls?: string[] | null;
+  /**
+   * How many images to AI-generate per run when post_type is "carousel"
+   * and fixed_image_urls isn't set. Ignored for single/thread schedules.
+   */
+  carousel_image_count?: number | null;
   /**
    * When true (the default), a run only generates content and queues it
    * as a "pending_review" draft — nothing gets published until the user
@@ -64,35 +75,54 @@ export async function processSchedule(
   const requiresApproval = schedule.require_approval !== false;
 
   try {
-    const hasFixedImage = Boolean(schedule.fixed_image_url);
+    const isCarousel = schedule.post_type === "carousel";
+    const hasFixedImage = !isCarousel && Boolean(schedule.fixed_image_url);
+    const hasFixedImages = isCarousel && Array.isArray(schedule.fixed_image_urls) && schedule.fixed_image_urls.length >= 2;
+
     const {
       posts,
       imageUrl: aiImageUrl,
+      imageUrls: aiImageUrls,
       imageError,
       textAttachment
     } = await generateStyledPost({
       supabase,
       creatorId: schedule.creator_id,
       topic: schedule.topic ?? undefined,
-      postType: schedule.post_type as "single" | "thread",
+      postType: schedule.post_type as "single" | "thread" | "carousel",
       niche: schedule.niche,
       role: schedule.role_prompt,
-      // Skip AI generation entirely when a fixed image is set — it would
-      // just be thrown away below.
-      generateImage: Boolean(schedule.generate_image) && !hasFixedImage
+      // Skip AI generation entirely when a fixed image (or fixed carousel
+      // images) is set — it would just be thrown away below.
+      generateImage: isCarousel
+        ? Boolean(schedule.generate_image) && !hasFixedImages
+        : Boolean(schedule.generate_image) && !hasFixedImage,
+      carouselImageCount: schedule.carousel_image_count ?? 3
     });
-    const imageUrl = hasFixedImage ? (schedule.fixed_image_url as string) : aiImageUrl;
+
+    const imageUrl = isCarousel ? null : hasFixedImage ? (schedule.fixed_image_url as string) : aiImageUrl;
+    const imageUrls = isCarousel ? (hasFixedImages ? (schedule.fixed_image_urls as string[]) : aiImageUrls) : null;
+    const postType = isCarousel ? "carousel" : posts.length > 1 ? "thread" : "single";
+    const usedFixedImage = isCarousel ? hasFixedImages : hasFixedImage;
+
+    // A carousel with fewer than 2 images can't actually be published —
+    // fail the run now (recorded as last_error on the schedule) rather
+    // than saving a draft that can never go out.
+    if (isCarousel && (!imageUrls || imageUrls.length < 2)) {
+      throw new Error(imageError ?? "Carousel needs at least 2 images — upload some, or enable AI image generation.");
+    }
 
     if (requiresApproval) {
       const { error: insertError } = await supabase.from("scheduled_posts").insert({
         user_id: schedule.user_id,
         creator_id: schedule.creator_id,
         posting_schedule_id: schedule.id,
-        post_type: posts.length > 1 ? "thread" : "single",
+        post_type: postType,
         content_draft: posts,
         image_url: imageUrl,
+        image_urls: imageUrls,
         image_error: imageError,
-        uploaded_image: hasFixedImage,
+        uploaded_image: usedFixedImage,
         text_attachment: textAttachment,
         status: "pending_review"
       });
@@ -117,23 +147,29 @@ export async function processSchedule(
 
     let threadsPostId: string;
     try {
-      threadsPostId = await publishThreadPosts(threadsUserId, accessToken, posts, imageUrl, textAttachment);
+      threadsPostId = isCarousel
+        ? await publishCarouselPost(threadsUserId, accessToken, posts[0] ?? "", imageUrls as string[])
+        : await publishThreadPosts(threadsUserId, accessToken, posts, imageUrl, textAttachment);
     } catch (publishErr) {
       // A ThreadsPartialPublishError means the root post genuinely went
       // live on Threads before something later in the chain (almost always
       // a reply) failed — record the real threads_post_id so the draft
       // links to the actual post instead of looking like nothing happened
-      // at all. Any other error means nothing published.
+      // at all. Any other error means nothing published. (Doesn't apply to
+      // carousels — see publishCarouselPost's doc comment — but the same
+      // generic handling below still works fine since isPartial is simply
+      // always false there.)
       const isPartial = publishErr instanceof ThreadsPartialPublishError;
       await supabase.from("scheduled_posts").insert({
         user_id: schedule.user_id,
         creator_id: schedule.creator_id,
         posting_schedule_id: schedule.id,
-        post_type: posts.length > 1 ? "thread" : "single",
+        post_type: postType,
         content_draft: posts,
         image_url: imageUrl,
+        image_urls: imageUrls,
         image_error: imageError,
-        uploaded_image: hasFixedImage,
+        uploaded_image: usedFixedImage,
         text_attachment: textAttachment,
         status: "failed",
         threads_post_id: isPartial ? publishErr.rootId : null,
@@ -146,11 +182,12 @@ export async function processSchedule(
       user_id: schedule.user_id,
       creator_id: schedule.creator_id,
       posting_schedule_id: schedule.id,
-      post_type: posts.length > 1 ? "thread" : "single",
+      post_type: postType,
       content_draft: posts,
       image_url: imageUrl,
+      image_urls: imageUrls,
       image_error: imageError,
-      uploaded_image: hasFixedImage,
+      uploaded_image: usedFixedImage,
       text_attachment: textAttachment,
       status: "posted",
       threads_post_id: threadsPostId,

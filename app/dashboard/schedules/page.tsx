@@ -31,7 +31,7 @@ export default async function SchedulesPage({
     supabase
       .from("posting_schedules")
       .select(
-        "id, creator_id, interval_hours, post_type, topic, niche, role_prompt, generate_image, fixed_image_url, require_approval, is_active, next_run_at, last_run_at, last_result, last_error, creators(username)"
+        "id, creator_id, interval_hours, post_type, topic, niche, role_prompt, generate_image, fixed_image_url, fixed_image_urls, carousel_image_count, require_approval, is_active, next_run_at, last_run_at, last_result, last_error, creators(username)"
       )
       .order("created_at", { ascending: false })
   ]);
@@ -131,6 +131,7 @@ export default async function SchedulesPage({
                   >
                     <option value="single">Single post</option>
                     <option value="thread">Thread</option>
+                    <option value="carousel">Carousel (multi-image)</option>
                   </select>
                 </div>
               </div>
@@ -149,7 +150,8 @@ export default async function SchedulesPage({
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-600">
-                  Upload a fixed image (optional) — reused for every run instead of AI generation
+                  Upload a fixed image (optional, Single/Thread only) — reused for every run instead of AI
+                  generation
                 </label>
                 <input
                   type="file"
@@ -158,10 +160,42 @@ export default async function SchedulesPage({
                   className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
                 />
               </div>
+              <div className="rounded-md border border-slate-100 bg-slate-50 p-3 space-y-3">
+                <p className="text-xs font-medium text-slate-600">Carousel format only (ignored otherwise)</p>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">
+                    Upload fixed images (2-20) — reused for every run instead of AI generation
+                  </label>
+                  <input
+                    type="file"
+                    name="carouselImages"
+                    accept="image/*"
+                    multiple
+                    className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">
+                    Number of AI images per run (if not uploading fixed images above)
+                  </label>
+                  <select
+                    name="carouselImageCount"
+                    defaultValue="3"
+                    className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400 sm:w-40"
+                  >
+                    {[2, 3, 4, 5, 6, 8, 10].map((n) => (
+                      <option key={n} value={n}>
+                        {n} images
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-sm text-slate-600">
                   <input type="checkbox" name="generateImage" className="rounded border-slate-300" />
-                  Generate an image every run too (AI, via Gemini — free, ignored if you upload a fixed image above)
+                  Generate image(s) every run too (AI, via Gemini — free, ignored if you uploaded fixed
+                  image(s) above)
                 </label>
                 <label className="flex items-center gap-2 text-sm text-slate-600">
                   <input
@@ -202,12 +236,20 @@ export default async function SchedulesPage({
                   </div>
                   <CardDescription className="space-y-1">
                     <span className="block">
-                      {schedule.post_type === "thread" ? "Thread" : "Single post"}
+                      {schedule.post_type === "carousel"
+                        ? "Carousel"
+                        : schedule.post_type === "thread"
+                          ? "Thread"
+                          : "Single post"}
                       {schedule.topic ? ` · Topic: ${schedule.topic}` : " · Auto-picked topics"}
                       {nicheLabel(schedule.niche) && ` · Niche: ${nicheLabel(schedule.niche)}`}
-                      {schedule.fixed_image_url
-                        ? " · + fixed uploaded image"
-                        : schedule.generate_image && " · + AI image"}
+                      {schedule.post_type === "carousel"
+                        ? schedule.fixed_image_urls && (schedule.fixed_image_urls as string[]).length > 0
+                          ? ` · + ${(schedule.fixed_image_urls as string[]).length} fixed uploaded images`
+                          : schedule.generate_image && ` · + ${schedule.carousel_image_count ?? 3} AI images`
+                        : schedule.fixed_image_url
+                          ? " · + fixed uploaded image"
+                          : schedule.generate_image && " · + AI image"}
                       {" · "}
                       {schedule.require_approval ? "Needs your approval" : "Auto-publishes (no review)"}
                     </span>
@@ -221,6 +263,19 @@ export default async function SchedulesPage({
                         alt="Fixed image used every run"
                         className="mt-1 h-16 w-16 rounded-md border border-slate-200 object-cover"
                       />
+                    )}
+                    {schedule.fixed_image_urls && (schedule.fixed_image_urls as string[]).length > 0 && (
+                      <span className="mt-1 flex flex-wrap gap-1">
+                        {(schedule.fixed_image_urls as string[]).map((url, i) => (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            key={i}
+                            src={url}
+                            alt={`Fixed carousel image ${i + 1}`}
+                            className="h-16 w-16 rounded-md border border-slate-200 object-cover"
+                          />
+                        ))}
+                      </span>
                     )}
                     <span className="block">
                       Next run: <LocalDateTime iso={schedule.next_run_at} />
