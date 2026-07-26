@@ -617,6 +617,57 @@ changes.
 - Text posts are capped at 500 characters (`generate-styled-post.ts`
   already asks Claude to stay well under that per post).
 
+## Auto-Comment
+
+AI writes short, generic-friendly replies to posts from your tracked
+creators (Dashboard → Creators) and publishes them via the **official**
+Threads API's `reply_to_id` parameter — the same connection Module 4 uses,
+no Playwright/browser automation involved. Configured in **Dashboard →
+Settings → Auto-Comment**: an enable toggle, a daily comment limit, and a
+min/max delay range (minutes) — a random wait somewhere in that range is
+rolled after every comment, so replies go out spaced apart instead of
+back-to-back.
+
+**Deliberately scoped to only what the official API actually supports:**
+
+- **Targets:** only posts from creators you've already added and left
+  active — the same list shown on the Creators page. Fetched via
+  `GET /profile_posts?username=...` (`lib/threads/fetch-profile-posts.ts`),
+  which is the one official endpoint that returns a real Graph API media id
+  for someone else's public post. That id is what `reply_to_id` actually
+  requires.
+- **Not your personal Threads feed.** There is no official API endpoint for
+  a personal/algorithmic feed at all (confirmed against Meta's Threads API
+  reference — the only discovery endpoints are a specific user's posts,
+  keyword search, and mentions). Reaching the personal feed would require
+  Playwright browser automation performing real write actions (typing/
+  clicking Reply) on strangers' posts, tuned to dodge Threads' bot
+  detection — this app intentionally does not do that; see the note below.
+- **Not the Playwright scraper's post IDs.** `scraped_threads.platform_
+  post_id` (used by Module 1's Study feature) is derived from a post's URL
+  shortcode, not the internal numeric id `reply_to_id` needs — so Auto-
+  Comment always re-fetches via the official `profile_posts` endpoint
+  rather than reusing anything already scraped.
+
+**How a cycle works** (`lib/auto-comment/process-auto-comment.ts`, ticked
+every ~60s by the same `server.js` interval Module 4 uses, via
+`app/api/cron/run-auto-comments`): checks the daily limit and the random
+delay aren't blocking it, picks one of your active tracked creators at
+random, fetches their recent posts, skips any already commented on (see
+`commented_posts` — also shown as a history list in Settings), asks Claude
+for a short reply (`lib/generation/generate-comment.ts`), and publishes it
+via `publishReply` (`lib/threads/publish.ts`). At most one comment per
+cycle per user — the daily cap and delay are what actually throttle it
+across the day, not a burst per tick.
+
+**Why no personal-feed / anti-detection mode:** that combination (mass
+AI-generated replies landing on strangers' posts who never opted in, sent
+through automation specifically tuned to evade Threads' bot detection)
+crosses into inauthentic-engagement/spam territory regardless of rate — it
+was considered and intentionally left out. What's built instead still gets
+you automated engagement, just through Meta's own sanctioned reply
+mechanism on posts you're already tracking.
+
 ## Mobile / PWA
 
 CopyCreator is installable as a Progressive Web App — on Android Chrome,

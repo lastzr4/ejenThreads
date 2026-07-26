@@ -319,6 +319,43 @@ export async function publishCarouselPost(
 }
 
 /**
+ * Publishes a short reply to an EXISTING post that the connected account
+ * doesn't necessarily own — e.g. a tracked creator's post, or a keyword
+ * search result. This is the Auto-Comment feature's only write path: it
+ * reuses createContainer's existing replyToId support (the container-
+ * creation call already accepts reply_to_id — see CreateContainerOptions
+ * above), it's just never been exposed as its own entry point until now.
+ * Requires the TARGET post's real Graph API media id (the numeric id
+ * GET /profile_posts or GET /{user}/threads returns) — NOT a Threads
+ * shortcode/URL slug, and NOT anything scraped via Playwright (see
+ * lib/threads/fetch-profile-posts.ts, which is the one supported way to get
+ * a valid id for a post CopyCreator didn't itself publish).
+ * Returns the id of the newly published reply.
+ */
+export async function publishReply(
+  threadsUserId: string,
+  accessToken: string,
+  text: string,
+  replyToId: string
+): Promise<string> {
+  if (!text.trim()) {
+    throw new ThreadsApiError("Reply text can't be empty");
+  }
+  if (!replyToId) {
+    throw new ThreadsApiError("Missing the post id to reply to");
+  }
+
+  const { id: containerId } = await createContainer({
+    threadsUserId,
+    accessToken,
+    text: text.trim(),
+    replyToId
+  });
+  await waitForContainerReady(containerId, accessToken);
+  return publishContainer(threadsUserId, accessToken, containerId);
+}
+
+/**
  * Publishes one or more posts as a Threads thread: the first post stands
  * alone, and each subsequent post is chained as a reply to the previous
  * one's published id (reply_to_id) — this is how Threads represents a

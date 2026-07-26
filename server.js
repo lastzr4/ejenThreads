@@ -25,6 +25,7 @@ const handle = app.getRequestHandler();
 
 const TICK_INTERVAL_MS = 60_000;
 let tickInFlight = false;
+let autoCommentTickInFlight = false;
 
 async function runSchedulerTick(port) {
   if (tickInFlight) return; // previous tick still running — skip this one rather than overlap
@@ -44,6 +45,29 @@ async function runSchedulerTick(port) {
   }
 }
 
+// Auto-Comment's own tick, on the same interval — a separate in-flight flag
+// so a slow schedules tick never blocks/delays auto-comment (or vice
+// versa). Most calls are a fast no-op: processAutoCommentForUser enforces
+// each user's own delay/daily-limit and only actually posts when both allow
+// it.
+async function runAutoCommentTick(port) {
+  if (autoCommentTickInFlight) return;
+  autoCommentTickInFlight = true;
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/api/cron/run-auto-comments`, {
+      method: "POST",
+      headers: process.env.CRON_SECRET ? { authorization: `Bearer ${process.env.CRON_SECRET}` } : {}
+    });
+    if (!res.ok) {
+      console.error(`[auto-comment] tick returned ${res.status}`);
+    }
+  } catch (err) {
+    console.error("[auto-comment] tick failed:", err);
+  } finally {
+    autoCommentTickInFlight = false;
+  }
+}
+
 app.prepare().then(() => {
   createServer((req, res) => {
     const parsedUrl = parse(req.url, true);
@@ -51,5 +75,6 @@ app.prepare().then(() => {
   }).listen(port, () => {
     console.log(`> CopyCreator ready on port ${port}`);
     setInterval(() => runSchedulerTick(port), TICK_INTERVAL_MS);
+    setInterval(() => runAutoCommentTick(port), TICK_INTERVAL_MS);
   });
 });

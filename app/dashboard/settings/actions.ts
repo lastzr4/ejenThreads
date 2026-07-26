@@ -96,6 +96,46 @@ export async function clearThreadsSession() {
   redirect("/dashboard/settings?message=Session%20cleared");
 }
 
+/**
+ * Auto-Comment settings — enable/disable, daily cap, and the random delay
+ * range between comments. Deliberately no "target" field here: it always
+ * targets every active tracked creator (see lib/auto-comment/process-auto-
+ * comment.ts), the same list already shown on the Creators page.
+ */
+export async function updateAutoCommentSettings(formData: FormData) {
+  const supabase = createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const enabled = formData.get("enabled") === "on";
+  const dailyLimitRaw = Number(formData.get("dailyLimit"));
+  const delayMinRaw = Number(formData.get("delayMin"));
+  const delayMaxRaw = Number(formData.get("delayMax"));
+
+  const dailyLimit = Number.isFinite(dailyLimitRaw) ? Math.min(200, Math.max(1, Math.round(dailyLimitRaw))) : 10;
+  const delayMin = Number.isFinite(delayMinRaw) ? Math.min(1440, Math.max(1, Math.round(delayMinRaw))) : 5;
+  const delayMax = Number.isFinite(delayMaxRaw) ? Math.min(1440, Math.max(delayMin, Math.round(delayMaxRaw))) : Math.max(delayMin, 10);
+
+  const { error } = await supabase.from("user_settings").upsert({
+    user_id: user.id,
+    auto_comment_enabled: enabled,
+    auto_comment_daily_limit: dailyLimit,
+    auto_comment_delay_min_minutes: delayMin,
+    auto_comment_delay_max_minutes: delayMax
+  });
+
+  if (error) {
+    redirect(`/dashboard/settings?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/dashboard/settings");
+  redirect(
+    `/dashboard/settings?message=${encodeURIComponent(enabled ? "Auto-Comment enabled" : "Auto-Comment settings saved")}`
+  );
+}
+
 export async function disconnectThreadsApi() {
   const supabase = createClient();
   const {

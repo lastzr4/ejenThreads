@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { saveThreadsSession, clearThreadsSession, disconnectThreadsApi } from "./actions";
+import { saveThreadsSession, clearThreadsSession, disconnectThreadsApi, updateAutoCommentSettings } from "./actions";
 import { SubmitButton } from "@/components/submit-button";
 import { LocalDateTime } from "@/components/local-datetime";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,9 @@ export default async function SettingsPage({
   const { data: settings } = await supabase
     .from("user_settings")
     .select(
-      "threads_session_updated_at, threads_api_user_id, threads_api_token_expires_at, threads_api_connected_at"
+      `threads_session_updated_at, threads_api_user_id, threads_api_token_expires_at, threads_api_connected_at,
+      auto_comment_enabled, auto_comment_daily_limit, auto_comment_delay_min_minutes,
+      auto_comment_delay_max_minutes, auto_comment_count_today, auto_comment_count_reset_at`
     )
     .eq("user_id", user?.id ?? "")
     .maybeSingle();
@@ -36,6 +38,25 @@ export default async function SettingsPage({
   const apiTokenExpiringSoon = apiTokenExpiresAt
     ? apiTokenExpiresAt.getTime() - Date.now() < 5 * 24 * 60 * 60 * 1000
     : false;
+
+  const { count: activeCreatorCount } = await supabase
+    .from("creators")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user?.id ?? "")
+    .eq("is_active", true);
+
+  const { data: recentComments } = await supabase
+    .from("commented_posts")
+    .select("id, post_permalink, post_excerpt, comment_text, status, error_message, created_at, creators(username)")
+    .eq("user_id", user?.id ?? "")
+    .order("created_at", { ascending: false })
+    .limit(8);
+
+  const autoCommentEnabled = Boolean(settings?.auto_comment_enabled);
+  const autoCommentDailyLimit = (settings?.auto_comment_daily_limit as number) ?? 10;
+  const autoCommentDelayMin = (settings?.auto_comment_delay_min_minutes as number) ?? 5;
+  const autoCommentDelayMax = (settings?.auto_comment_delay_max_minutes as number) ?? 10;
+  const autoCommentCountToday = (settings?.auto_comment_count_today as number) ?? 0;
 
   return (
     <div className="space-y-6">
@@ -181,6 +202,121 @@ export default async function SettingsPage({
               </form>
             )}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Auto-Comment</CardTitle>
+          <CardDescription>
+            AI writes a short, friendly reply to posts from your tracked creators (Dashboard → Creators),
+            published via the official Threads API&apos;s reply feature — the same connection above, not
+            browser automation, and never your own personal feed. Only public creators you&apos;ve
+            already added and left active are ever targeted.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {!apiConnected && (
+            <p className="rounded-md bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900">
+              Connect the Threads API above first — Auto-Comment publishes through the same connection.
+            </p>
+          )}
+          {apiConnected && !activeCreatorCount && (
+            <p className="rounded-md bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900">
+              No active tracked creators yet — add one in Dashboard → Creators first, there&apos;s nothing
+              to comment on otherwise.
+            </p>
+          )}
+
+          <form action={updateAutoCommentSettings} className="space-y-3">
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="enabled" defaultChecked={autoCommentEnabled} className="h-4 w-4" />
+              Enable Auto-Comment
+            </label>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <label className="block text-xs">
+                <span className="mb-1 block font-medium text-slate-600">Daily limit (comments/day)</span>
+                <input
+                  type="number"
+                  name="dailyLimit"
+                  min={1}
+                  max={200}
+                  defaultValue={autoCommentDailyLimit}
+                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
+                />
+              </label>
+              <label className="block text-xs">
+                <span className="mb-1 block font-medium text-slate-600">Min delay (minutes)</span>
+                <input
+                  type="number"
+                  name="delayMin"
+                  min={1}
+                  max={1440}
+                  defaultValue={autoCommentDelayMin}
+                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
+                />
+              </label>
+              <label className="block text-xs">
+                <span className="mb-1 block font-medium text-slate-600">Max delay (minutes)</span>
+                <input
+                  type="number"
+                  name="delayMax"
+                  min={1}
+                  max={1440}
+                  defaultValue={autoCommentDelayMax}
+                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
+                />
+              </label>
+            </div>
+            <p className="text-xs text-slate-500">
+              A random wait between the min and max is used after every comment, so replies go out spaced
+              apart instead of back-to-back. {autoCommentEnabled && (
+                <>
+                  Used <strong>{autoCommentCountToday}</strong> of <strong>{autoCommentDailyLimit}</strong>{" "}
+                  today so far.
+                </>
+              )}
+            </p>
+            <SubmitButton size="sm" pendingText="Saving…">
+              Save Auto-Comment settings
+            </SubmitButton>
+          </form>
+
+          {recentComments && recentComments.length > 0 && (
+            <div className="space-y-2 border-t border-slate-100 pt-3">
+              <p className="text-xs font-medium text-slate-600">Recent auto-comments</p>
+              <div className="space-y-2">
+                {recentComments.map((c) => {
+                  const creatorUsername = (c.creators as unknown as { username: string } | null)?.username;
+                  return (
+                    <div key={c.id} className="rounded-md border border-slate-100 bg-slate-50 p-2 text-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-slate-500">
+                          {creatorUsername ? `@${creatorUsername}` : "Unknown creator"} ·{" "}
+                          <LocalDateTime iso={c.created_at as string} />
+                        </span>
+                        <span
+                          className={
+                            c.status === "posted"
+                              ? "rounded-full bg-green-100 px-2 py-0.5 text-green-700"
+                              : "rounded-full bg-red-100 px-2 py-0.5 text-red-700"
+                          }
+                        >
+                          {c.status}
+                        </span>
+                      </div>
+                      {c.status === "posted" ? (
+                        <p className="mt-1 text-slate-700">&quot;{c.comment_text}&quot;</p>
+                      ) : (
+                        <p className="mt-1 text-red-600">{c.error_message}</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
