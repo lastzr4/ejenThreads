@@ -686,6 +686,25 @@ auth-gated content, so it's never cached and always goes to the network;
 the service worker exists mainly so Chrome/Android recognize the app as
 installable.
 
+**Install prompt:** Chrome/Android normally only shows its own "Add to Home
+Screen" popup after its own engagement heuristics are met (a handful of
+visits over time), so most people never see it. `components/pwa-install-
+prompt.tsx` listens for the `beforeinstallprompt` event and shows its own
+small banner immediately, with an Install button that triggers the same
+native popup on demand. iOS Safari has no equivalent event at all (Apple
+only allows installing via the Share sheet, no programmatic prompt) — on
+iOS the banner instead shows a one-line "Tap Share → Add to Home Screen"
+instruction. Never shown at all once the app is already running standalone
+(installed), and a dismiss click hides it for the rest of that browser
+session (`sessionStorage`).
+
+The app icons (`public/icons/*.png`, plus the maskable variant used when
+Android applies its own icon-shape mask) are the CopyCreator logo — update
+them by replacing those PNGs at the same sizes (192, 512, a 512 maskable
+version with the logo scaled to roughly 70-75% of the canvas so shape masks
+don't clip it, a 180 apple-touch-icon, and a 32 favicon) if the logo ever
+changes.
+
 The dashboard header nav (`components/dashboard-nav.tsx`) collapses into a
 hamburger menu below the `md` breakpoint instead of overflowing on phone
 widths.
