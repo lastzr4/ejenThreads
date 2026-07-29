@@ -21,6 +21,20 @@ export interface GeneratedImage {
 // https://ai.google.dev/gemini-api/docs/image-generation for current names.
 const MODEL = process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image";
 
+// Preview/experimental image models (this one included) return a transient
+// "currently experiencing high demand" / 503 UNAVAILABLE error fairly often
+// under real traffic — it's Google's servers being momentarily overloaded,
+// not a quota or billing problem (that's the separate "quota exceeded"
+// error, which is NOT retried here since retrying it would just fail again
+// identically). A couple of short-backoff retries clears most of these
+// without the user having to manually click Generate again.
+const MAX_ATTEMPTS = 3;
+const RETRY_BASE_DELAY_MS = 2000;
+
+function isTransientOverloadError(status: number, message: string): boolean {
+  return status === 503 || status === 429 || /high demand|overloaded|unavailable/i.test(message);
+}
+
 export async function generateImage(prompt: string): Promise<GeneratedImage> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -30,34 +44,50 @@ export async function generateImage(prompt: string): Promise<GeneratedImage> {
     );
   }
 
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1/models/${MODEL}:generateContent`, {
-    method: "POST",
-    headers: {
-      "x-goog-api-key": apiKey,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { responseModalities: ["TEXT", "IMAGE"] }
-    })
-  });
+  let lastError: string = "Image generation request failed";
 
-  const data = await res.json();
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1/models/${MODEL}:generateContent`, {
+      method: "POST",
+      headers: {
+        "x-goog-api-key": apiKey,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { responseModalities: ["TEXT", "IMAGE"] }
+      })
+    });
 
-  if (!res.ok) {
-    throw new ImageGenerationError(data?.error?.message || "Image generation request failed");
+    const data = await res.json();
+
+    if (!res.ok) {
+      lastError = data?.error?.message || "Image generation request failed";
+      if (attempt < MAX_ATTEMPTS && isTransientOverloadError(res.status, lastError)) {
+        await new Promise((resolve) => setTimeout(resolve, RETRY_BASE_DELAY_MS * attempt));
+        continue;
+      }
+      throw new ImageGenerationError(lastError);
+    }
+
+    const parts: Array<{ inlineData?: { data?: string; mimeType?: string } }> =
+      data?.candidates?.[0]?.content?.parts ?? [];
+    const imagePart = parts.find((p) => p.inlineData?.data);
+
+    if (!imagePart?.inlineData?.data) {
+      lastError = "Image generation returned no image data";
+      if (attempt < MAX_ATTEMPTS) {
+        await new Promise((resolve) => setTimeout(resolve, RETRY_BASE_DELAY_MS * attempt));
+        continue;
+      }
+      throw new ImageGenerationError(lastError);
+    }
+
+    return {
+      buffer: Buffer.from(imagePart.inlineData.data, "base64"),
+      contentType: imagePart.inlineData.mimeType || "image/png"
+    };
   }
 
-  const parts: Array<{ inlineData?: { data?: string; mimeType?: string } }> =
-    data?.candidates?.[0]?.content?.parts ?? [];
-  const imagePart = parts.find((p) => p.inlineData?.data);
-
-  if (!imagePart?.inlineData?.data) {
-    throw new ImageGenerationError("Image generation returned no image data");
-  }
-
-  return {
-    buffer: Buffer.from(imagePart.inlineData.data, "base64"),
-    contentType: imagePart.inlineData.mimeType || "image/png"
-  };
+  throw new ImageGenerationError(lastError);
 }
