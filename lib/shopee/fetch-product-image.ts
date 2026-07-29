@@ -10,16 +10,23 @@ import { chromium } from "playwright";
 // image keeps the real product's appearance while still composing a fresh,
 // engagement-optimized scene around it.
 //
-// CAVEAT (be upfront about this): the selector/meta-tag strategy below could
-// not be empirically confirmed against a live Shopee render — this sandbox's
+// CAVEAT (be upfront about this): none of the three strategies below
+// (same-origin item API, og:image meta tag, largest-non-logo <img>) could be
+// empirically confirmed against a live Shopee render — this sandbox's
 // outbound network blocks downloading a Chromium binary, so Playwright
-// couldn't actually be run here to verify. This follows the same "confirmed
-// against a live page" methodology lib/threads/scraper.ts's DOM extractor
-// used, just without the live-verification step completed yet. If this
-// comes back empty/wrong after a real run on Railway (which does have a
-// working headless Chromium — see /Dockerfile), check server logs for the
-// `[fetchShopeeProductInfo]` messages below and adjust the selectors — same
-// one-iteration refinement the Threads scraper needed originally.
+// couldn't actually be run here to verify. First real attempt (2026-07-29)
+// grabbed what looks like a Shopee logo/branding image instead of the real
+// product — the og:image branch had no logo-filter at the time; strategies
+// 1 and 3's logo-filter were added after that, still unconfirmed live. This
+// follows the same "confirmed against a live page" methodology
+// lib/threads/scraper.ts's DOM extractor used, just without the live-
+// verification step completed yet. If this still comes back empty/wrong,
+// check server logs for the `[fetchShopeeProductInfo]` messages below —
+// same one-iteration (or more) refinement the Threads scraper originally
+// needed. If it keeps being unreliable, the "Upload your own image" field on
+// the Generate post form (now usable as a reference photo too when
+// "Generate image with AI" is also checked — see generate-actions.ts) is the
+// dependable fallback: save the real product photo yourself and upload it.
 
 export interface ShopeeProductInfo {
   imageBuffer: Buffer;
@@ -65,19 +72,53 @@ export async function fetchShopeeProductInfo(url: string): Promise<ShopeeProduct
     // meta tags and lazy-loading the main product image.
     await page.waitForTimeout(2000);
 
-    const extracted = await page.evaluate(() => {
+    const extracted = await page.evaluate(async () => {
+      const looksLikeBrandingAsset = (src: string) => /logo|icon|favicon|badge|sprite/i.test(src);
+
+      // Strategy 1: Shopee's own item-detail API, called same-origin (so it
+      // carries the real cookies/referer this page already established —
+      // far more likely to succeed than an external request would). Shopee
+      // item URLs encode shopid/itemid as the two numbers in the path;
+      // tried in both orders since which is which isn't confirmed.
+      const pathNums = Array.from(location.pathname.matchAll(/(\d{5,})/g)).map((m) => m[1]);
+      for (const [shopid, itemid] of [
+        [pathNums[0], pathNums[1]],
+        [pathNums[1], pathNums[0]]
+      ]) {
+        if (!shopid || !itemid) continue;
+        try {
+          const res = await fetch(`/api/v4/item/get?itemid=${itemid}&shopid=${shopid}`, {
+            headers: { accept: "application/json" }
+          });
+          if (!res.ok) continue;
+          const json = await res.json();
+          const item = json?.data?.item ?? json?.item;
+          const imageHash = item?.images?.[0] ?? item?.image;
+          if (imageHash) {
+            return {
+              imageUrl: `https://cf.shopee.com.my/file/${imageHash}`,
+              title: item?.name ?? document.title ?? null
+            };
+          }
+        } catch {
+          // try the next ordering / fall through to the other strategies
+        }
+      }
+
+      // Strategy 2: og:image meta tag, if this render actually has one and
+      // it's not just Shopee's generic site-wide logo/banner.
       const og = (name: string) =>
         document.querySelector(`meta[property="${name}"]`)?.getAttribute("content") ?? null;
-
       const ogImage = og("og:image");
       const ogTitle = og("og:title") || document.title || null;
-      if (ogImage) return { imageUrl: ogImage, title: ogTitle };
+      if (ogImage && !looksLikeBrandingAsset(ogImage)) {
+        return { imageUrl: ogImage, title: ogTitle };
+      }
 
-      // Fallback: no OG tags present in this render — pick the largest
-      // visible <img> on the page as a best guess at the main product
-      // photo, excluding tiny icons/logos.
+      // Strategy 3: largest visible <img> on the page, excluding anything
+      // that looks like a logo/icon/badge rather than a product photo.
       const images = Array.from(document.querySelectorAll("img"))
-        .filter((img) => img.naturalWidth > 200 && img.naturalHeight > 200)
+        .filter((img) => img.naturalWidth > 200 && img.naturalHeight > 200 && !looksLikeBrandingAsset(img.src))
         .sort((a, b) => b.naturalWidth * b.naturalHeight - a.naturalWidth * a.naturalHeight);
 
       return images[0] ? { imageUrl: images[0].src, title: ogTitle } : null;

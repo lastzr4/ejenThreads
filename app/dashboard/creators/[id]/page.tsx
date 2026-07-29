@@ -272,8 +272,11 @@ export default async function CreatorDetailPage({
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-600">
-                  Upload your own image (optional, Single/Thread only) — used instead of AI generation if
-                  provided
+                  Upload your own image (optional, Single/Thread only) — used as-is if &quot;Generate
+                  image(s) with AI&quot; below is OFF. If that&apos;s ON too, this becomes a reference photo
+                  instead: AI keeps the real product accurate but builds a fresh, more engaging scene around
+                  it (recommended for product photos saved from a listing yourself — more reliable than
+                  auto-fetching from a Shopee link).
                 </label>
                 <input
                   type="file"

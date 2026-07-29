@@ -49,10 +49,23 @@ export async function generatePost(formData: FormData) {
   let errorMessage: string | null = null;
 
   try {
-    // A user-uploaded image always takes priority over AI generation — no
-    // point spending a Gemini call for an image that's about to be
-    // overridden anyway. For carousel, that means skipping AI generation
-    // entirely if images were uploaded for it.
+    // Single/thread only: if the user both uploaded their own photo AND
+    // checked "Generate image with AI", the upload becomes a REFERENCE
+    // photo for Gemini (same mechanism as the Shopee auto-scrape — see
+    // lib/shopee/fetch-product-image.ts) rather than the final image
+    // outright, and it takes priority over auto-scraping since it's
+    // guaranteed to actually be the right product. Upload without the
+    // checkbox keeps the original behavior: used as-is, no AI call at all.
+    const useUploadAsReference = postType !== "carousel" && wantsImage && hasUploadedImage;
+    let referenceImageOverride: { buffer: Buffer; mimeType: string } | undefined;
+    if (useUploadAsReference) {
+      const file = uploadedImageFile as File;
+      referenceImageOverride = {
+        buffer: Buffer.from(await file.arrayBuffer()),
+        mimeType: file.type || "image/jpeg"
+      };
+    }
+
     const {
       posts,
       imageUrl: aiImageUrl,
@@ -67,9 +80,12 @@ export async function generatePost(formData: FormData) {
       niche: niche || undefined,
       role: role || undefined,
       generateImage:
-        postType === "carousel" ? wantsImage && !hasCarouselUploads : wantsImage && !hasUploadedImage,
+        postType === "carousel"
+          ? wantsImage && !hasCarouselUploads
+          : wantsImage && (!hasUploadedImage || useUploadAsReference),
       carouselImageCount,
-      imageDirection: imageDirection || undefined
+      imageDirection: imageDirection || undefined,
+      referenceImageOverride
     });
 
     let imageUrl: string | null = aiImageUrl;
@@ -92,7 +108,7 @@ export async function generatePost(formData: FormData) {
         imageUrls = null;
         imageError = err instanceof Error ? err.message : "Image upload failed";
       }
-    } else if (postType !== "carousel" && hasUploadedImage) {
+    } else if (postType !== "carousel" && hasUploadedImage && !useUploadAsReference) {
       try {
         const file = uploadedImageFile as File;
         const buffer = Buffer.from(await file.arrayBuffer());

@@ -105,6 +105,16 @@ export interface GenerateStyledPostParams {
    * carousel slide already gets its own AI-decided image_prompt).
    */
   imageDirection?: string | null;
+  /**
+   * A real product photo supplied directly by the user (e.g. saved from the
+   * Shopee listing themselves) — takes priority over auto-scraping a
+   * Shopee link out of the topic (see lib/shopee/fetch-product-image.ts),
+   * since a user-supplied photo is always accurate where auto-scraping can
+   * grab the wrong image (a site logo/banner instead of the real product).
+   * Used the same way: as a Gemini reference image, not as the final post
+   * image outright — the AI still composes a fresh scene around it.
+   */
+  referenceImageOverride?: { buffer: Buffer; mimeType: string } | null;
 }
 
 export interface GenerateStyledPostResult {
@@ -158,7 +168,8 @@ export async function generateStyledPost({
   role,
   generateImage: wantsImage = false,
   carouselImageCount = 3,
-  imageDirection
+  imageDirection,
+  referenceImageOverride
 }: GenerateStyledPostParams): Promise<GenerateStyledPostResult> {
   const { data: creator } = await supabase
     .from("creators")
@@ -402,13 +413,19 @@ export async function generateStyledPost({
       imageError = "Image was requested but Claude didn't return an image_prompt to generate from";
     } else {
       try {
-        // If the topic has a Shopee link, fetch the REAL product photo and
-        // use it as a reference (see lib/gemini/generate-image.ts) so the
-        // product's actual appearance is accurate, rather than an AI
-        // hallucination from a text description alone. Soft-fails to the
-        // old text-only behavior if the fetch doesn't work out — never
-        // fatal to the post itself.
-        const productPhoto = shopeeUrl ? await fetchShopeeProductInfo(shopeeUrl) : null;
+        // A user-supplied reference photo (saved from the listing
+        // themselves) always wins over auto-scraping — it's guaranteed to
+        // actually be the product, where scraping a Shopee link can grab
+        // the wrong image entirely (e.g. a site logo/banner instead of the
+        // real product, when a per-product image genuinely isn't exposed
+        // to a normal page render). Only fall back to auto-scraping if no
+        // override was given. Soft-fails to the old text-only behavior if
+        // neither is available/works out — never fatal to the post itself.
+        const productPhoto = referenceImageOverride
+          ? { imageBuffer: referenceImageOverride.buffer, imageMimeType: referenceImageOverride.mimeType }
+          : shopeeUrl
+            ? await fetchShopeeProductInfo(shopeeUrl)
+            : null;
 
         const scenePrompt =
           result.image_prompt ||

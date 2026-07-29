@@ -349,6 +349,17 @@ image rather than failing the whole post. Single/Thread only for now — a
 carousel's multiple AI-decided images don't yet have an equivalent
 reference-photo mode. Persisted as `scheduled_posts.image_direction`.
 
+Auto-scraping a Shopee page for the real photo is inherently less reliable
+than a real browser session would suggest — the first real attempt grabbed
+a Shopee logo/branding image instead of the product (fixed since by adding
+a logo/icon filter and trying Shopee's own item API first, but still not
+independently confirmed against a live page). If it keeps picking the wrong
+image, **upload the real product photo yourself** on the same Generate post
+form (the existing "Upload your own image" field) while also checking
+"Generate image(s) with AI" — with both set, your upload becomes the
+reference photo instead of auto-scraping, which is far more reliable since
+it's guaranteed to actually be the product.
+
 **Long-form content with a Role, Format = Single post**: Threads caps a
 normal post at ~500 characters. If the content comfortably fits, it's
 written as one post as expected. If a Role (e.g. "cerpen writer") genuinely
