@@ -81,6 +81,7 @@ export async function fetchShopeeProductInfo(url: string): Promise<ShopeeProduct
       // item URLs encode shopid/itemid as the two numbers in the path;
       // tried in both orders since which is which isn't confirmed.
       const pathNums = Array.from(location.pathname.matchAll(/(\d{5,})/g)).map((m) => m[1]);
+      const apiAttempts: string[] = [];
       for (const [shopid, itemid] of [
         [pathNums[0], pathNums[1]],
         [pathNums[1], pathNums[0]]
@@ -90,6 +91,7 @@ export async function fetchShopeeProductInfo(url: string): Promise<ShopeeProduct
           const res = await fetch(`/api/v4/item/get?itemid=${itemid}&shopid=${shopid}`, {
             headers: { accept: "application/json" }
           });
+          apiAttempts.push(`shopid=${shopid}&itemid=${itemid} -> HTTP ${res.status}`);
           if (!res.ok) continue;
           const json = await res.json();
           const item = json?.data?.item ?? json?.item;
@@ -97,11 +99,13 @@ export async function fetchShopeeProductInfo(url: string): Promise<ShopeeProduct
           if (imageHash) {
             return {
               imageUrl: `https://cf.shopee.com.my/file/${imageHash}`,
-              title: item?.name ?? document.title ?? null
+              title: item?.name ?? document.title ?? null,
+              strategy: "item-api",
+              debug: apiAttempts
             };
           }
-        } catch {
-          // try the next ordering / fall through to the other strategies
+        } catch (e) {
+          apiAttempts.push(`shopid=${shopid}&itemid=${itemid} -> threw ${e instanceof Error ? e.message : e}`);
         }
       }
 
@@ -112,7 +116,7 @@ export async function fetchShopeeProductInfo(url: string): Promise<ShopeeProduct
       const ogImage = og("og:image");
       const ogTitle = og("og:title") || document.title || null;
       if (ogImage && !looksLikeBrandingAsset(ogImage)) {
-        return { imageUrl: ogImage, title: ogTitle };
+        return { imageUrl: ogImage, title: ogTitle, strategy: "og:image", debug: apiAttempts };
       }
 
       // Strategy 3: largest visible <img> on the page, excluding anything
@@ -121,11 +125,27 @@ export async function fetchShopeeProductInfo(url: string): Promise<ShopeeProduct
         .filter((img) => img.naturalWidth > 200 && img.naturalHeight > 200 && !looksLikeBrandingAsset(img.src))
         .sort((a, b) => b.naturalWidth * b.naturalHeight - a.naturalWidth * a.naturalHeight);
 
-      return images[0] ? { imageUrl: images[0].src, title: ogTitle } : null;
+      return images[0]
+        ? { imageUrl: images[0].src, title: ogTitle, strategy: "largest-img", debug: apiAttempts }
+        : { imageUrl: null, title: ogTitle, strategy: "none", debug: apiAttempts };
     });
 
+    const finalUrl = page.url();
     await browser.close();
     browser = undefined;
+
+    // Logged unconditionally (not just on failure) so the NEXT wrong-image
+    // report can be diagnosed directly from these lines — which strategy
+    // won, what URL it picked, what the item-API calls actually returned —
+    // instead of guessing again with no feedback loop.
+    console.log(
+      "[fetchShopeeProductInfo] resolvedUrl=%s strategy=%s imageUrl=%s title=%s apiAttempts=%j",
+      finalUrl,
+      extracted?.strategy,
+      extracted?.imageUrl,
+      extracted?.title,
+      extracted?.debug
+    );
 
     if (!extracted?.imageUrl) {
       console.error("[fetchShopeeProductInfo] no product image found on page:", url);
