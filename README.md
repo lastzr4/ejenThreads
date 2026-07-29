@@ -487,6 +487,29 @@ spinning the copy never burns another image-generation call or throws away
 an uploaded photo. Only available while a draft is still "draft" or
 "pending review", same restriction as Edit.
 
+## Image Generator
+
+A standalone image tool at **Dashboard → Image Generator**
+(`app/dashboard/image-generator/page.tsx`) — separate from Generate post,
+no post text/creator style involved, just a Gemini image on its own. Three
+starting templates (`lib/image-templates.ts`) fill the prompt textarea when
+clicked (still editable before generating):
+
+1. **Produk Fizikal / Botol / Aksesori (Lifestyle Casual)** — everyday
+   casual product placement (vanity, kitchen counter, bag flatlay).
+2. **Pakaian / OOTD** — outfit-of-the-day fashion photo, urban outdoor
+   setting.
+3. **Barangan Rumah / Dekorasi / Gadget (Minimalist Home Vibe)** —
+   minimalist modern-interior styling.
+
+An optional reference-photo upload works the same way as Generate post's
+Shopee/upload reference mode (see above): if provided, Gemini keeps that
+exact product's real appearance accurate and builds the prompt's described
+scene around it, instead of imagining the product from scratch. No
+history/gallery — the most recent result is shown right on the page after
+generating (a real, permanent Supabase Storage URL under it either way, so
+nothing is actually lost by navigating away, just not listed anywhere).
+
 ## Module 4: Auto-Posting (Official Threads API + Schedules)
 
 This is the piece that actually posts to your real Threads account, fully
