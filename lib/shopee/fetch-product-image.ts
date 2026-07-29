@@ -10,23 +10,33 @@ import { chromium } from "playwright";
 // image keeps the real product's appearance while still composing a fresh,
 // engagement-optimized scene around it.
 //
-// CAVEAT (be upfront about this): none of the three strategies below
-// (same-origin item API, og:image meta tag, largest-non-logo <img>) could be
-// empirically confirmed against a live Shopee render — this sandbox's
-// outbound network blocks downloading a Chromium binary, so Playwright
-// couldn't actually be run here to verify. First real attempt (2026-07-29)
-// grabbed what looks like a Shopee logo/branding image instead of the real
-// product — the og:image branch had no logo-filter at the time; strategies
-// 1 and 3's logo-filter were added after that, still unconfirmed live. This
-// follows the same "confirmed against a live page" methodology
-// lib/threads/scraper.ts's DOM extractor used, just without the live-
-// verification step completed yet. If this still comes back empty/wrong,
-// check server logs for the `[fetchShopeeProductInfo]` messages below —
-// same one-iteration (or more) refinement the Threads scraper originally
-// needed. If it keeps being unreliable, the "Upload your own image" field on
-// the Generate post form (now usable as a reference photo too when
-// "Generate image with AI" is also checked — see generate-actions.ts) is the
-// dependable fallback: save the real product photo yourself and upload it.
+// ROOT CAUSE CONFIRMED (2026-07-29, via the diagnostic log line added
+// earlier today): this isn't a parsing/selector problem — Shopee's
+// anti-bot system detects the headless Playwright request (Railway's
+// datacenter IP + automation fingerprint) and silently redirects it to
+// `shopee.com.my/verify/traffic/error` (a "you look like a bot" challenge
+// page) BEFORE the real product page ever loads. Every extraction strategy
+// was then running against that generic challenge page, not the product —
+// which is why the "largest image" fallback kept grabbing a generic Shopee
+// promo banner (`deo.shopeemobile.com/.../assets/*.png`) with a title of
+// "Shopee Malaysia | Free Shipping Across Malaysia", not the product photo.
+//
+// Two changes address this:
+//   1. Detect the /verify/ redirect and bail out cleanly (null) instead of
+//      running extraction against a challenge page and returning something
+//      plausible-looking but wrong.
+//   2. A few light, best-effort stealth tweaks (hiding the automation
+//      fingerprint, more realistic headers) that may reduce how often the
+//      block triggers — NOT a guaranteed fix; anti-bot detection is an
+//      adversarial, moving target and a datacenter IP alone can be enough
+//      to get flagged regardless of browser fingerprinting.
+//
+// Given that, treat this as best-effort and expect it to fail some/most of
+// the time. The dependable path stays: the "Upload your own image" field on
+// the Generate post form (also usable as a reference photo when "Generate
+// image with AI" is checked too — see generate-actions.ts) — save the real
+// product photo yourself and upload it, which always works regardless of
+// what Shopee's bot detection decides to do.
 
 export interface ShopeeProductInfo {
   imageBuffer: Buffer;
@@ -58,12 +68,31 @@ export function extractShopeeUrl(text: string | null | undefined): string | null
 export async function fetchShopeeProductInfo(url: string): Promise<ShopeeProductInfo | null> {
   let browser;
   try {
-    browser = await chromium.launch({ headless: true });
+    // --disable-blink-features=AutomationControlled hides one of the more
+    // obvious automation signals Chromium exposes by default. Best-effort
+    // only — see the module-level comment above for why this is not a
+    // guaranteed bypass of Shopee's bot detection.
+    browser = await chromium.launch({
+      headless: true,
+      args: ["--disable-blink-features=AutomationControlled"]
+    });
     const context = await browser.newContext({
       userAgent:
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
         "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-      viewport: { width: 1280, height: 900 }
+      viewport: { width: 1280, height: 900 },
+      locale: "en-MY",
+      timezoneId: "Asia/Kuala_Lumpur",
+      extraHTTPHeaders: {
+        "accept-language": "en-MY,en;q=0.9,ms-MY;q=0.8,ms;q=0.7"
+      }
+    });
+    // Playwright's Chromium normally reports navigator.webdriver = true,
+    // one of the most commonly checked automation signals — override it
+    // before any page script runs, same technique used broadly for basic
+    // headless-detection evasion. Best-effort only, see comment above.
+    await context.addInitScript(() => {
+      Object.defineProperty(navigator, "webdriver", { get: () => undefined });
     });
     const page = await context.newPage();
 
@@ -71,6 +100,17 @@ export async function fetchShopeeProductInfo(url: string): Promise<ShopeeProduct
     // Give client-side rendering/hydration a moment to finish injecting
     // meta tags and lazy-loading the main product image.
     await page.waitForTimeout(2000);
+
+    // Shopee's anti-bot system can silently redirect to a "verify you're
+    // not a bot" challenge page instead of the real product page (confirmed
+    // happening in practice — see module comment). Running any extraction
+    // strategy against that page returns something plausible-looking but
+    // completely unrelated to the product, which is worse than just
+    // failing — bail out cleanly here instead.
+    if (/\/verify\//i.test(new URL(page.url()).pathname)) {
+      console.error("[fetchShopeeProductInfo] blocked by Shopee anti-bot (redirected to a verify/challenge page):", page.url());
+      return null;
+    }
 
     const extracted = await page.evaluate(async () => {
       const looksLikeBrandingAsset = (src: string) => /logo|icon|favicon|badge|sprite/i.test(src);

@@ -349,16 +349,24 @@ image rather than failing the whole post. Single/Thread only for now — a
 carousel's multiple AI-decided images don't yet have an equivalent
 reference-photo mode. Persisted as `scheduled_posts.image_direction`.
 
-Auto-scraping a Shopee page for the real photo is inherently less reliable
-than a real browser session would suggest — the first real attempt grabbed
-a Shopee logo/branding image instead of the product (fixed since by adding
-a logo/icon filter and trying Shopee's own item API first, but still not
-independently confirmed against a live page). If it keeps picking the wrong
-image, **upload the real product photo yourself** on the same Generate post
-form (the existing "Upload your own image" field) while also checking
-"Generate image(s) with AI" — with both set, your upload becomes the
-reference photo instead of auto-scraping, which is far more reliable since
-it's guaranteed to actually be the product.
+**Auto-scraping a Shopee page is best-effort and expected to fail often —
+root cause confirmed (2026-07-29) via server logs**: Shopee's anti-bot
+system detects the automated request (Railway's datacenter IP + headless
+browser fingerprint) and silently redirects it to a "verify you're not a
+bot" challenge page instead of the real product page. Every extraction
+strategy was then running against that generic challenge page, which is why
+it grabbed a generic Shopee promo banner instead of the product.
+`lib/shopee/fetch-product-image.ts` now detects that redirect and bails out
+cleanly (falls back to the old AI-imagined image) rather than using
+something wrong, plus a few best-effort stealth tweaks (hiding the
+`navigator.webdriver` automation flag, more realistic headers/locale) that
+may reduce how often the block triggers — not a guaranteed fix, since
+anti-bot detection is an adversarial, moving target. **The dependable path
+is uploading the real product photo yourself**: on the same Generate post
+form, use "Upload your own image" while also checking "Generate image(s)
+with AI" — with both set, your upload becomes the reference photo instead
+of auto-scraping, which always works regardless of what Shopee's bot
+detection decides to do that day.
 
 **Long-form content with a Role, Format = Single post**: Threads caps a
 normal post at ~500 characters. If the content comfortably fits, it's
