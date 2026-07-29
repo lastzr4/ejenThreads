@@ -22,8 +22,10 @@ import { uploadGeneratedImage } from "@/lib/storage/upload-image";
  */
 export async function generateStandaloneImage(formData: FormData) {
   const prompt = String(formData.get("prompt") ?? "").trim();
-  const referenceFile = formData.get("referenceImage");
-  const hasReference = referenceFile instanceof File && referenceFile.size > 0;
+  const referenceFiles = formData
+    .getAll("referenceImages")
+    .filter((f): f is File => f instanceof File && f.size > 0);
+  const hasReference = referenceFiles.length > 0;
 
   const supabase = createClient();
   const {
@@ -39,19 +41,22 @@ export async function generateStandaloneImage(formData: FormData) {
   let errorMessage: string | null = null;
 
   try {
-    const referenceImage = hasReference
-      ? {
-          buffer: Buffer.from(await (referenceFile as File).arrayBuffer()),
-          mimeType: (referenceFile as File).type || "image/jpeg"
-        }
+    const referenceImages = hasReference
+      ? await Promise.all(
+          referenceFiles.map(async (file) => ({
+            buffer: Buffer.from(await file.arrayBuffer()),
+            mimeType: file.type || "image/jpeg"
+          }))
+        )
       : undefined;
 
-    const finalPrompt = referenceImage
-      ? `Using the exact product/item shown in the attached reference photo, keep its real appearance ` +
-        `(shape, color, material, label) accurate and unchanged. Build the following scene around it: ${prompt}`
+    const finalPrompt = referenceImages
+      ? `Using the exact product/item shown in the attached reference photo${referenceImages.length > 1 ? "s" : ""}, ` +
+        `keep its real appearance (shape, color, material, label) accurate and unchanged. Build the following ` +
+        `scene around it: ${prompt}`
       : prompt;
 
-    const { buffer, contentType } = await generateImage(finalPrompt, referenceImage);
+    const { buffer, contentType } = await generateImage(finalPrompt, referenceImages);
     imageUrl = await uploadGeneratedImage(buffer, contentType);
   } catch (err) {
     errorMessage = err instanceof Error ? err.message : "Image generation failed";

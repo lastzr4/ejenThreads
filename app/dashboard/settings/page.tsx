@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { saveThreadsSession, clearThreadsSession, disconnectThreadsApi, updateAutoCommentSettings } from "./actions";
+import { cleanupUnusedGeneratedImages } from "./cleanup-actions";
 import { SubmitButton } from "@/components/submit-button";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { LocalDateTime } from "@/components/local-datetime";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -317,6 +319,29 @@ export default async function SettingsPage({
               </div>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Storage cleanup</CardTitle>
+          <CardDescription>
+            Every AI-generated and manually-uploaded image (Generate post, Schedules, Image Generator) is
+            saved permanently — nothing deletes it automatically, even after the draft using it is deleted
+            or spun into a new version. This grows over time if left alone.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form action={cleanupUnusedGeneratedImages}>
+            <ConfirmSubmitButton
+              variant="outline"
+              size="sm"
+              pendingText="Cleaning up…"
+              confirmMessage="Delete every stored image that no draft or schedule currently uses? Images still referenced anywhere are kept — only truly unused ones are removed. This can't be undone."
+            >
+              Clean up unused images
+            </ConfirmSubmitButton>
+          </form>
         </CardContent>
       </Card>
     </div>

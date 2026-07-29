@@ -502,13 +502,27 @@ clicked (still editable before generating):
 3. **Barangan Rumah / Dekorasi / Gadget (Minimalist Home Vibe)** —
    minimalist modern-interior styling.
 
-An optional reference-photo upload works the same way as Generate post's
-Shopee/upload reference mode (see above): if provided, Gemini keeps that
-exact product's real appearance accurate and builds the prompt's described
-scene around it, instead of imagining the product from scratch. No
-history/gallery — the most recent result is shown right on the page after
-generating (a real, permanent Supabase Storage URL under it either way, so
-nothing is actually lost by navigating away, just not listed anywhere).
+An optional reference-photo upload (now multiple files, each individually
+removable before generating — see `components/image-generator-form.tsx`)
+works the same way as Generate post's Shopee/upload reference mode (see
+above): if provided, Gemini keeps that exact product's real appearance
+accurate and builds the prompt's described scene around it, instead of
+imagining the product from scratch. No history/gallery — the most recent
+result is shown right on the page after generating (a real, permanent
+Supabase Storage URL under it either way, so nothing is actually lost by
+navigating away, just not listed anywhere).
+
+**Every generated/uploaded image is stored permanently** in the shared
+`generated-images` Supabase Storage bucket (`lib/storage/upload-image.ts`)
+— nothing deletes automatically, even once the draft using it is deleted or
+spun into a new version, so this only grows over time. **Dashboard →
+Settings → Storage cleanup** (`app/dashboard/settings/cleanup-actions.ts`)
+deletes every file in that bucket that isn't referenced by any
+`scheduled_posts.image_url`/`image_urls` or `posting_schedules.
+fixed_image_url`/`fixed_image_urls` row, across ALL users (the bucket is
+shared/global, not per-user, so this deliberately checks everyone's rows —
+scoping it to just one user's own rows could delete a file someone else's
+draft still points at). Confirm-gated, same pattern as Drafts' Clear all.
 
 ## Module 4: Auto-Posting (Official Threads API + Schedules)
 

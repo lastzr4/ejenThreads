@@ -41,15 +41,22 @@ export interface ReferenceImage {
 }
 
 /**
- * When referenceImage is given, Gemini does image-conditioned generation
- * (a real photo attached alongside the text instruction) instead of
- * imagining an image from the text prompt alone — used so a Shopee product
- * photo (see lib/shopee/fetch-product-image.ts) keeps its real appearance
- * (shape, color, label) while the model composes a fresh, more engaging
- * scene around it, rather than hallucinating an unrelated product from
- * scratch. Omit it for the original text-only behavior.
+ * When referenceImage(s) are given, Gemini does image-conditioned
+ * generation (real photos attached alongside the text instruction) instead
+ * of imagining an image from the text prompt alone — used so a Shopee
+ * product photo (see lib/shopee/fetch-product-image.ts) or a user's own
+ * uploaded photo(s) (Image Generator tab, or Generate post's upload field)
+ * keeps its real appearance (shape, color, label) while the model composes
+ * a fresh, more engaging scene around it, rather than hallucinating an
+ * unrelated product from scratch. Multiple images are useful for showing
+ * the model more than one angle/context of the same item — all are
+ * attached to the same single request. Omit for the original text-only
+ * behavior.
  */
-export async function generateImage(prompt: string, referenceImage?: ReferenceImage): Promise<GeneratedImage> {
+export async function generateImage(
+  prompt: string,
+  referenceImage?: ReferenceImage | ReferenceImage[]
+): Promise<GeneratedImage> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new ImageGenerationError(
@@ -60,15 +67,14 @@ export async function generateImage(prompt: string, referenceImage?: ReferenceIm
 
   let lastError: string = "Image generation request failed";
 
-  const requestParts: Array<Record<string, unknown>> = [];
-  if (referenceImage) {
-    requestParts.push({
-      inlineData: {
-        mimeType: referenceImage.mimeType,
-        data: referenceImage.buffer.toString("base64")
-      }
-    });
-  }
+  const referenceImages = !referenceImage ? [] : Array.isArray(referenceImage) ? referenceImage : [referenceImage];
+
+  const requestParts: Array<Record<string, unknown>> = referenceImages.map((ref) => ({
+    inlineData: {
+      mimeType: ref.mimeType,
+      data: ref.buffer.toString("base64")
+    }
+  }));
   requestParts.push({ text: prompt });
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
