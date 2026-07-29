@@ -330,6 +330,25 @@ the manual Generate form and Schedules (persisted as
 `posting_schedules.role_prompt`, so a recurring schedule keeps using the
 same persona every run).
 
+**Real product photo for Shopee links (Arahan gambar)**: pasting a raw
+Shopee link in Topic used to produce an AI-imagined image with no relation
+to the actual product — Claude can't open a link, so it was only ever
+guessing. Now, when the Topic contains a Shopee link and "Generate
+image(s)" is on, `lib/shopee/fetch-product-image.ts` fetches the REAL
+product photo from that link (headless Chromium, same mechanism as Module
+1's scraper) and passes it to Gemini as a reference image
+(`lib/gemini/generate-image.ts`'s `referenceImage` param) — the product's
+actual appearance (shape, color, label) stays accurate, while Gemini builds
+a fresh scene around it. The optional **Arahan gambar** field (separate
+from Role, which only affects the post's text) directs that scene, e.g.
+"seorang perempuan nak dating pakai item ini" — leave it blank to let
+Claude pick a vivid, engagement-oriented scene on its own. If the product
+photo can't be fetched for any reason (link didn't resolve, page structure
+changed), this silently falls back to the previous text-only AI-imagined
+image rather than failing the whole post. Single/Thread only for now — a
+carousel's multiple AI-decided images don't yet have an equivalent
+reference-photo mode. Persisted as `scheduled_posts.image_direction`.
+
 **Long-form content with a Role, Format = Single post**: Threads caps a
 normal post at ~500 characters. If the content comfortably fits, it's
 written as one post as expected. If a Role (e.g. "cerpen writer") genuinely

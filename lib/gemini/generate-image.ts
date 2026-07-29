@@ -35,7 +35,21 @@ function isTransientOverloadError(status: number, message: string): boolean {
   return status === 503 || status === 429 || /high demand|overloaded|unavailable/i.test(message);
 }
 
-export async function generateImage(prompt: string): Promise<GeneratedImage> {
+export interface ReferenceImage {
+  buffer: Buffer;
+  mimeType: string;
+}
+
+/**
+ * When referenceImage is given, Gemini does image-conditioned generation
+ * (a real photo attached alongside the text instruction) instead of
+ * imagining an image from the text prompt alone — used so a Shopee product
+ * photo (see lib/shopee/fetch-product-image.ts) keeps its real appearance
+ * (shape, color, label) while the model composes a fresh, more engaging
+ * scene around it, rather than hallucinating an unrelated product from
+ * scratch. Omit it for the original text-only behavior.
+ */
+export async function generateImage(prompt: string, referenceImage?: ReferenceImage): Promise<GeneratedImage> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new ImageGenerationError(
@@ -46,6 +60,17 @@ export async function generateImage(prompt: string): Promise<GeneratedImage> {
 
   let lastError: string = "Image generation request failed";
 
+  const requestParts: Array<Record<string, unknown>> = [];
+  if (referenceImage) {
+    requestParts.push({
+      inlineData: {
+        mimeType: referenceImage.mimeType,
+        data: referenceImage.buffer.toString("base64")
+      }
+    });
+  }
+  requestParts.push({ text: prompt });
+
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const res = await fetch(`https://generativelanguage.googleapis.com/v1/models/${MODEL}:generateContent`, {
       method: "POST",
@@ -54,7 +79,7 @@ export async function generateImage(prompt: string): Promise<GeneratedImage> {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
+        contents: [{ parts: requestParts }],
         generationConfig: { responseModalities: ["TEXT", "IMAGE"] }
       })
     });

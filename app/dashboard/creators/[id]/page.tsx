@@ -313,6 +313,21 @@ export default async function CreatorDetailPage({
                   </select>
                 </div>
               </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  Arahan gambar (optional, Single/Thread only) — overrides the SCENE/context the image
+                  builds, e.g. &quot;seorang perempuan nak dating pakai item ini&quot;. If the Topic has a
+                  Shopee link, the real product photo is used as reference (accurate appearance) and this
+                  just directs the lifestyle scene around it — aim for something with viral/high-engagement
+                  potential.
+                </label>
+                <textarea
+                  name="imageDirection"
+                  rows={2}
+                  placeholder="Leave blank to let AI decide the scene"
+                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
+                />
+              </div>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <label className="flex items-center gap-2 text-sm text-slate-600">
                   <input type="checkbox" name="generateImage" className="rounded border-slate-300" />

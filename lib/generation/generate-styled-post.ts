@@ -4,6 +4,7 @@ import { getAnthropicClient, ANTHROPIC_MODEL } from "@/lib/anthropic/client";
 import { nicheLabel } from "@/lib/niches";
 import { generateImage } from "@/lib/gemini/generate-image";
 import { uploadGeneratedImage } from "@/lib/storage/upload-image";
+import { extractShopeeUrl, fetchShopeeProductInfo } from "@/lib/shopee/fetch-product-image";
 
 // Shared by both the manual "Generate post" button
 // (app/dashboard/creators/generate-actions.ts) and the Module 4 cron
@@ -90,6 +91,20 @@ export interface GenerateStyledPostParams {
    * as before (style profile + niche + topic only).
    */
   role?: string | null;
+  /**
+   * Optional override for the IMAGE specifically (separate from `role`,
+   * which governs the post TEXT's shape/structure) — e.g. "seorang
+   * perempuan nak dating pakai item ini". Only meaningful when an image is
+   * requested for a single/thread post. When the Topic contains a Shopee
+   * link, the real product photo is fetched (see lib/shopee/fetch-product-
+   * image.ts) and used as a reference so the product's actual appearance
+   * stays accurate — this field then directs the SCENE built around it
+   * (e.g. a lifestyle moment) rather than the product's look. Without a
+   * Shopee link, it still steers Claude's own image_prompt the same way,
+   * just without a real photo to anchor it. Ignored for carousels (each
+   * carousel slide already gets its own AI-decided image_prompt).
+   */
+  imageDirection?: string | null;
 }
 
 export interface GenerateStyledPostResult {
@@ -142,7 +157,8 @@ export async function generateStyledPost({
   niche,
   role,
   generateImage: wantsImage = false,
-  carouselImageCount = 3
+  carouselImageCount = 3,
+  imageDirection
 }: GenerateStyledPostParams): Promise<GenerateStyledPostResult> {
   const { data: creator } = await supabase
     .from("creators")
@@ -198,6 +214,13 @@ export async function generateStyledPost({
 
   const postTypeLabel =
     postType === "thread" ? "thread (multiple sequential posts)" : postType === "carousel" ? "carousel post" : "post";
+
+  // Only single/thread posts get a reference-photo image (see the wantsImage
+  // result-handling below) — carousels already generate their own set of
+  // AI-imagined images per slide via image_prompts, a real single reference
+  // photo doesn't map cleanly onto that yet.
+  const shopeeUrl = postType !== "carousel" ? extractShopeeUrl(topic ?? null) : null;
+  const hasImageDirection = Boolean(imageDirection && imageDirection.trim());
 
   const userPrompt =
     `Write a brand-new, original Threads ${postTypeLabel} ` +
@@ -265,8 +288,20 @@ export async function generateStyledPost({
           `vivid English photo descriptions, one per carousel slide, in swipe order (e.g. a before/after pair, ` +
           `steps in a process, or different angles/moments of the same product or scene) — distinct from each ` +
           `other but visually cohesive as a set.\n\n`
-        : `An accompanying image was requested — also include image_prompt: a vivid English description of a ` +
-          `realistic photo (product shot or lifestyle scene) that fits this post.\n\n`
+        : shopeeUrl
+          ? `An accompanying image was requested — a REAL photo of the actual product (from the Shopee link ` +
+            `in the topic) will be attached separately as a reference, so its true appearance is already ` +
+            `covered. For image_prompt, describe ONLY the surrounding scene/context/composition to build ` +
+            `around that product — NOT the product's own look (don't redescribe its shape/color/packaging, ` +
+            `that comes from the reference photo) — ` +
+            (hasImageDirection
+              ? `following this specific direction: "${imageDirection!.trim()}".\n\n`
+              : `a vivid, photorealistic, social-media-optimized lifestyle scene with strong viral/high-` +
+                `engagement potential.\n\n`)
+          : `An accompanying image was requested — also include image_prompt: a vivid English description of a ` +
+            `realistic photo (product shot or lifestyle scene) that fits this post` +
+            (hasImageDirection ? `, following this direction: "${imageDirection!.trim()}"` : "") +
+            `.\n\n`
       : "") +
     `Call record_generated_post with the result.`;
 
@@ -359,13 +394,36 @@ export async function generateStyledPost({
       }
     }
   } else if (wantsImage) {
-    if (!result.image_prompt) {
+    if (!result.image_prompt && !hasImageDirection) {
       // Shouldn't normally happen since wantsImage adds an instruction to
-      // include image_prompt, but Claude can still omit it.
+      // include image_prompt, but Claude can still omit it. (An
+      // imageDirection override alone is still enough to proceed even
+      // without one — see the fallback scene text below.)
       imageError = "Image was requested but Claude didn't return an image_prompt to generate from";
     } else {
       try {
-        const { buffer, contentType } = await generateImage(result.image_prompt);
+        // If the topic has a Shopee link, fetch the REAL product photo and
+        // use it as a reference (see lib/gemini/generate-image.ts) so the
+        // product's actual appearance is accurate, rather than an AI
+        // hallucination from a text description alone. Soft-fails to the
+        // old text-only behavior if the fetch doesn't work out — never
+        // fatal to the post itself.
+        const productPhoto = shopeeUrl ? await fetchShopeeProductInfo(shopeeUrl) : null;
+
+        const scenePrompt =
+          result.image_prompt ||
+          imageDirection!.trim(); // hasImageDirection guarantees this is non-empty when image_prompt is missing
+
+        const finalPrompt = productPhoto
+          ? `Using the exact product shown in the attached reference photo, keep its real appearance ` +
+            `(shape, color, packaging/label, material) accurate and unchanged. Build a fresh, vivid, ` +
+            `photorealistic, social-media-optimized scene around it: ${scenePrompt}`
+          : scenePrompt;
+
+        const { buffer, contentType } = await generateImage(
+          finalPrompt,
+          productPhoto ? { buffer: productPhoto.imageBuffer, mimeType: productPhoto.imageMimeType } : undefined
+        );
         imageUrl = await uploadGeneratedImage(buffer, contentType);
       } catch (err) {
         // Non-fatal to the whole generation — the text is still good on
