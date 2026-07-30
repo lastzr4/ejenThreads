@@ -368,6 +368,24 @@ with AI" — with both set, your upload becomes the reference photo instead
 of auto-scraping, which always works regardless of what Shopee's bot
 detection decides to do that day.
 
+**Product photo library — give it once, reuse forever**: uploading the
+reference photo above works, but re-uploading it every single time you post
+about the same product is tedious. Now, whenever a fresh upload is used as a
+reference photo (see above) for a Topic containing a recognized Shopee link,
+it's automatically saved to `shopee_product_photos`, keyed by a stable
+product id resolved from the link (`lib/shopee/resolve-product-id.ts` —
+follows redirects with a plain fetch, no browser rendering involved, so it
+isn't affected by the anti-bot block described above). The next time *any*
+link to that same product appears in a Topic field — even a differently
+shaped link (short link vs. full link, with/without tracking params) — the
+saved photo is found and used automatically as the reference image, with no
+upload needed and no dependency on the live auto-scrape working that day.
+You can also pre-register a link+photo pairing ahead of time, without going
+through Generate post at all: **Settings → Product photos (Shopee)** has a
+small form to paste a link and upload a photo directly, plus a list of
+everything saved so far with a delete button per item. A newer upload for
+the same product replaces the old saved photo.
+
 **Long-form content with a Role, Format = Single post**: Threads caps a
 normal post at ~500 characters. If the content comfortably fits, it's
 written as one post as expected. If a Role (e.g. "cerpen writer") genuinely

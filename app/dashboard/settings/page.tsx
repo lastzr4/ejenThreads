@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { saveThreadsSession, clearThreadsSession, disconnectThreadsApi, updateAutoCommentSettings } from "./actions";
 import { cleanupUnusedGeneratedImages } from "./cleanup-actions";
+import { addProductPhoto, deleteProductPhoto } from "./product-photo-actions";
 import { SubmitButton } from "@/components/submit-button";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { LocalDateTime } from "@/components/local-datetime";
@@ -53,6 +54,12 @@ export default async function SettingsPage({
     .eq("user_id", user?.id ?? "")
     .order("created_at", { ascending: false })
     .limit(8);
+
+  const { data: productPhotos } = await supabase
+    .from("shopee_product_photos")
+    .select("id, product_id, source_url, image_url, title, created_at")
+    .eq("user_id", user?.id ?? "")
+    .order("created_at", { ascending: false });
 
   const autoCommentEnabled = Boolean(settings?.auto_comment_enabled);
   const autoCommentDailyLimit = (settings?.auto_comment_daily_limit as number) ?? 10;
@@ -342,6 +349,85 @@ export default async function SettingsPage({
               Clean up unused images
             </ConfirmSubmitButton>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Product photos (Shopee)</CardTitle>
+          <CardDescription>
+            Give a link and a real photo once — next time that same product&apos;s link shows up in a
+            Topic field on Generate post, the saved photo is used automatically as the AI reference image.
+            No re-upload needed, and it skips relying on the live auto-scrape (which Shopee&apos;s
+            anti-bot system frequently blocks).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <form action={addProductPhoto} className="space-y-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="block text-xs">
+                <span className="mb-1 block font-medium text-slate-600">Shopee link</span>
+                <input
+                  type="text"
+                  name="shopeeUrl"
+                  placeholder="https://s.shopee.com.my/..."
+                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
+                />
+              </label>
+              <label className="block text-xs">
+                <span className="mb-1 block font-medium text-slate-600">Real product photo</span>
+                <input
+                  type="file"
+                  name="photo"
+                  accept="image/*"
+                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
+                />
+              </label>
+            </div>
+            <SubmitButton size="sm" pendingText="Saving…">
+              Save product photo
+            </SubmitButton>
+          </form>
+
+          {productPhotos && productPhotos.length > 0 && (
+            <div className="space-y-2 border-t border-slate-100 pt-3">
+              <p className="text-xs font-medium text-slate-600">Saved product photos</p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {productPhotos.map((p) => (
+                  <div
+                    key={p.id as string}
+                    className="flex items-center gap-3 rounded-md border border-slate-100 bg-slate-50 p-2 text-xs"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={p.image_url as string}
+                      alt={(p.title as string | null) ?? "Product photo"}
+                      className="h-12 w-12 shrink-0 rounded object-cover"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-slate-700">{(p.title as string | null) ?? "Untitled product"}</p>
+                      {p.source_url && (
+                        <a
+                          href={p.source_url as string}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="truncate block text-slate-400 hover:text-slate-600"
+                        >
+                          {p.source_url as string}
+                        </a>
+                      )}
+                    </div>
+                    <form action={deleteProductPhoto}>
+                      <input type="hidden" name="id" value={p.id as string} />
+                      <Button variant="ghost" size="sm" type="submit">
+                        Delete
+                      </Button>
+                    </form>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

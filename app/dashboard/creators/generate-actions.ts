@@ -5,6 +5,9 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { generateStyledPost } from "@/lib/generation/generate-styled-post";
 import { uploadGeneratedImage } from "@/lib/storage/upload-image";
+import { extractShopeeUrl } from "@/lib/shopee/fetch-product-image";
+import { resolveShopeeProductId } from "@/lib/shopee/resolve-product-id";
+import { getSavedProductPhoto, saveProductPhoto } from "@/lib/shopee/product-photo-library";
 
 export async function generatePost(formData: FormData) {
   const id = String(formData.get("id") ?? "");
@@ -66,6 +69,36 @@ export async function generatePost(formData: FormData) {
       };
     }
 
+    // "Give it once, reuse forever": if the Topic has a Shopee link, resolve
+    // it to a stable product id (see lib/shopee/resolve-product-id.ts — this
+    // just follows redirects, no browser rendering, so it isn't affected by
+    // Shopee's anti-bot page-render block). If no fresh upload was given
+    // this time but a photo was saved for this exact product before, use
+    // that automatically — no re-upload needed, and it skips the live
+    // auto-scrape entirely (which Shopee's bot detection frequently blocks
+    // anyway — see fetch-product-image.ts) since we already have a known-
+    // good photo on file.
+    const shopeeUrl = postType !== "carousel" ? extractShopeeUrl(topic) : null;
+    const shopeeProduct = shopeeUrl ? await resolveShopeeProductId(shopeeUrl) : null;
+
+    if (!referenceImageOverride && wantsImage && shopeeProduct) {
+      const saved = await getSavedProductPhoto(supabase, user.id, shopeeProduct.productId);
+      if (saved) {
+        try {
+          const res = await fetch(saved.imageUrl);
+          if (res.ok) {
+            referenceImageOverride = {
+              buffer: Buffer.from(await res.arrayBuffer()),
+              mimeType: res.headers.get("content-type") || "image/jpeg"
+            };
+          }
+        } catch {
+          // Non-fatal — falls through to the live auto-scrape attempt
+          // inside generateStyledPost instead.
+        }
+      }
+    }
+
     const {
       posts,
       imageUrl: aiImageUrl,
@@ -87,6 +120,25 @@ export async function generatePost(formData: FormData) {
       imageDirection: imageDirection || undefined,
       referenceImageOverride
     });
+
+    // A fresh upload for a recognized Shopee product link gets remembered
+    // for next time, regardless of whether the AI generation itself
+    // succeeded — the point is the photo was genuinely the right product,
+    // which is true independent of how the styled scene around it turned
+    // out. Never fatal to the post if this fails.
+    if (useUploadAsReference && shopeeProduct && referenceImageOverride) {
+      try {
+        await saveProductPhoto(
+          supabase,
+          user.id,
+          shopeeProduct.productId,
+          shopeeUrl ?? shopeeProduct.canonicalUrl,
+          referenceImageOverride
+        );
+      } catch (err) {
+        console.error("[generatePost] failed to save product photo to library:", err);
+      }
+    }
 
     let imageUrl: string | null = aiImageUrl;
     let imageUrls: string[] | null = aiImageUrls;
