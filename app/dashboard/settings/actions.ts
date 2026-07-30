@@ -149,7 +149,10 @@ export async function disconnectThreadsApi() {
       threads_api_user_id: null,
       threads_api_access_token: null,
       threads_api_token_expires_at: null,
-      threads_api_connected_at: null
+      threads_api_connected_at: null,
+      threads_api_username: null,
+      threads_api_name: null,
+      threads_api_profile_picture_url: null
     })
     .eq("user_id", user.id);
 

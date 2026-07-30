@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { signOut } from "@/app/login/actions";
@@ -26,6 +27,18 @@ export default async function DashboardLayout({ children }: { children: React.Re
     redirect("/login");
   }
 
+  // Shown next to Sign out on every dashboard page — not just Settings — so
+  // it's never ambiguous which real Threads account auto-posting, Auto-
+  // Comment, and Schedules are about to publish to while you're off in
+  // Creators/Drafts/Schedules, not just when you happen to be on Settings.
+  const { data: threadsAccount } = await supabase
+    .from("user_settings")
+    .select("threads_api_username, threads_api_profile_picture_url")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const threadsUsername = threadsAccount?.threads_api_username as string | null;
+  const threadsAvatar = threadsAccount?.threads_api_profile_picture_url as string | null;
+
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="relative flex items-center justify-between border-b border-slate-200 bg-white px-4 py-4 sm:px-6">
@@ -34,6 +47,27 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <DashboardNav />
         </div>
         <div className="flex items-center gap-2 text-sm text-slate-600 sm:gap-4">
+          <Link
+            href="/dashboard/settings"
+            className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 py-1 pl-1.5 pr-2.5 text-xs hover:border-slate-300"
+            title="Posts, replies, and schedules publish to this Threads account"
+          >
+            {threadsUsername ? (
+              <>
+                {threadsAvatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={threadsAvatar} alt={threadsUsername} className="h-5 w-5 rounded-full object-cover" />
+                ) : (
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-200 text-[10px] text-slate-500">
+                    ?
+                  </span>
+                )}
+                <span className="font-medium text-slate-700">@{threadsUsername}</span>
+              </>
+            ) : (
+              <span className="text-amber-700">Threads not connected</span>
+            )}
+          </Link>
           <span className="hidden sm:inline">{user.email}</span>
           <form action={signOut}>
             <Button variant="ghost" size="sm" type="submit">

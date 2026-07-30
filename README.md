@@ -629,6 +629,16 @@ checks on every tick and refreshes anything within 5 days of expiring) as
 long as it's used at least once before it fully expires — if it ever does
 fully expire, just click Connect again.
 
+**Which account is actually connected**: right after connecting, the app
+looks up the account's own username/name/avatar (`GET /{threads-user-id}`)
+and stores it alongside the token, purely so it's never ambiguous which real
+Threads account is about to receive everything auto-posted, auto-commented,
+or published from a schedule. It's shown two places — a small `@username`
+pill next to Sign out in the header on every dashboard page (click it to
+jump to Settings), and a fuller avatar + name block on the Threads API card
+in Settings itself. If it ever says "Threads not connected", nothing can
+publish until Connect with Threads is clicked.
+
 ### Setting up a schedule
 
 **Dashboard → Schedules** → pick a creator you've already Studied

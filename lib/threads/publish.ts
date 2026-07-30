@@ -55,6 +55,45 @@ export async function refreshLongLivedToken(
   };
 }
 
+export interface ThreadsProfile {
+  username: string | null;
+  name: string | null;
+  profilePictureUrl: string | null;
+}
+
+/**
+ * Looks up the connected account's own identity — username, display name,
+ * avatar — right after OAuth connects (see app/api/threads/oauth/callback).
+ * threads_api_user_id alone is just an opaque numeric id; without this,
+ * Settings could only say "Connected" with no way to tell WHICH real
+ * account auto-posting/auto-comment/schedules are about to publish to,
+ * which is exactly the mix-up this was added to prevent. Never fatal if it
+ * fails — the token itself is what matters for publishing, this is purely
+ * informational.
+ */
+export async function fetchThreadsProfile(threadsUserId: string, accessToken: string): Promise<ThreadsProfile> {
+  try {
+    const url = new URL(`${GRAPH_BASE}/${threadsUserId}`);
+    url.searchParams.set("fields", "username,name,threads_profile_picture_url");
+    url.searchParams.set("access_token", accessToken);
+
+    const res = await fetch(url.toString());
+    const data = await res.json();
+    if (!res.ok) {
+      throw new ThreadsApiError(data?.error?.message || data?.error_message || "Failed to fetch Threads profile");
+    }
+
+    return {
+      username: data.username ?? null,
+      name: data.name ?? null,
+      profilePictureUrl: data.threads_profile_picture_url ?? null
+    };
+  } catch (err) {
+    console.error("[fetchThreadsProfile] failed:", err instanceof Error ? err.message : err);
+    return { username: null, name: null, profilePictureUrl: null };
+  }
+}
+
 interface CreateContainerOptions {
   threadsUserId: string;
   accessToken: string;

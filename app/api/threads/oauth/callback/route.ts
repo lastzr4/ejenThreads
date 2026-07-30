@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getAppOrigin } from "@/lib/app-url";
+import { fetchThreadsProfile } from "@/lib/threads/publish";
 
 function settingsRedirect(params: Record<string, string>) {
   const url = new URL("/dashboard/settings", getAppOrigin());
@@ -84,19 +85,32 @@ export async function GET(request: NextRequest) {
 
     const expiresAt = new Date(Date.now() + Number(longLivedData.expires_in ?? 0) * 1000).toISOString();
 
+    // Who this token actually belongs to — shown on Settings so it's never
+    // ambiguous which real account auto-posting/auto-comment/schedules will
+    // publish to. Non-fatal if it fails (returns nulls); the connection
+    // itself still works either way, this is purely informational.
+    const profile = await fetchThreadsProfile(threadsUserId, longLivedData.access_token);
+
     const { error: dbError } = await supabase.from("user_settings").upsert({
       user_id: user.id,
       threads_api_user_id: threadsUserId,
       threads_api_access_token: longLivedData.access_token,
       threads_api_token_expires_at: expiresAt,
-      threads_api_connected_at: new Date().toISOString()
+      threads_api_connected_at: new Date().toISOString(),
+      threads_api_username: profile.username,
+      threads_api_name: profile.name,
+      threads_api_profile_picture_url: profile.profilePictureUrl
     });
 
     if (dbError) {
       return settingsRedirect({ error: dbError.message });
     }
 
-    return settingsRedirect({ message: "Threads API connected — auto-posting is ready to configure" });
+    return settingsRedirect({
+      message: profile.username
+        ? `Threads API connected to @${profile.username} — auto-posting is ready to configure`
+        : "Threads API connected — auto-posting is ready to configure"
+    });
   } catch (err) {
     return settingsRedirect({
       error: err instanceof Error ? err.message : "Threads API connection failed"

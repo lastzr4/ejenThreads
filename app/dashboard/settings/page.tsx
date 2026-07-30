@@ -27,6 +27,7 @@ export default async function SettingsPage({
     .from("user_settings")
     .select(
       `threads_session_updated_at, threads_api_user_id, threads_api_token_expires_at, threads_api_connected_at,
+      threads_api_username, threads_api_name, threads_api_profile_picture_url,
       auto_comment_enabled, auto_comment_daily_limit, auto_comment_delay_min_minutes,
       auto_comment_delay_max_minutes, auto_comment_count_today, auto_comment_count_reset_at`
     )
@@ -41,6 +42,9 @@ export default async function SettingsPage({
   const apiTokenExpiringSoon = apiTokenExpiresAt
     ? apiTokenExpiresAt.getTime() - Date.now() < 5 * 24 * 60 * 60 * 1000
     : false;
+  const apiUsername = settings?.threads_api_username as string | null;
+  const apiName = settings?.threads_api_name as string | null;
+  const apiProfilePictureUrl = settings?.threads_api_profile_picture_url as string | null;
 
   const { count: activeCreatorCount } = await supabase
     .from("creators")
@@ -181,6 +185,31 @@ export default async function SettingsPage({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {apiConnected && (
+            <div className="flex items-center gap-3 rounded-md border border-slate-200 bg-white p-3">
+              {apiProfilePictureUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={apiProfilePictureUrl}
+                  alt={apiUsername ?? "Connected account"}
+                  className="h-10 w-10 shrink-0 rounded-full object-cover"
+                />
+              ) : (
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-medium text-slate-400">
+                  ?
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-slate-900">
+                  {apiUsername ? `@${apiUsername}` : "Unknown account"}
+                </p>
+                <p className="truncate text-xs text-slate-500">
+                  {apiName ? `${apiName} · ` : ""}All posts, replies, and schedules below publish here.
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="rounded-md bg-slate-50 border border-slate-200 p-3 text-xs text-slate-700 space-y-1">
             <p>
               This is the official Meta Threads API — a separate, sanctioned connection from the
