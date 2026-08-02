@@ -3,8 +3,7 @@ import { refreshPerformanceAnalysis, syncMetricsNow } from "./actions";
 import { SubmitButton } from "@/components/submit-button";
 import { PendingBanner } from "@/components/pending-banner";
 import { LocalDateTime } from "@/components/local-datetime";
-import { hookTypeLabels } from "@/lib/hook-types";
-import { nicheLabel } from "@/lib/niches";
+import { PerformancePostsTable, type PerformancePostRow } from "@/components/performance-posts-table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default async function PerformancePage({
@@ -28,10 +27,28 @@ export default async function PerformancePage({
       .eq("user_id", user?.id ?? "")
       .eq("status", "posted")
       .order("posted_at", { ascending: false })
-      .limit(50)
+      // Effectively "all" — a generous safety cap rather than a real limit;
+      // one user's own posted-post history isn't going to realistically
+      // exceed this. Sorting/Top-10 (see PerformancePostsTable) happens
+      // client-side over whatever comes back here.
+      .limit(1000)
   ]);
 
   const syncedCount = (posts ?? []).filter((p) => p.metrics_updated_at).length;
+
+  const postRows: PerformancePostRow[] = (posts ?? []).map((p) => ({
+    id: p.id as string,
+    content_draft: p.content_draft as string[] | null,
+    post_type: p.post_type as string,
+    niche: p.niche as string | null,
+    hook_types: p.hook_types as string[] | null,
+    posted_at: p.posted_at as string | null,
+    metric_views: p.metric_views as number | null,
+    metric_likes: p.metric_likes as number | null,
+    metric_replies: p.metric_replies as number | null,
+    metric_shares: p.metric_shares as number | null,
+    username: (p.creators as unknown as { username: string } | null)?.username ?? null
+  }));
 
   return (
     <div className="space-y-6">
@@ -119,56 +136,13 @@ export default async function PerformancePage({
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Posted posts &amp; metrics</CardTitle>
-          <CardDescription>Most recent first. Metrics sync automatically every so often after posting.</CardDescription>
+          <CardDescription>
+            Top 10 by whichever metric you pick, plus every posted post below — click a column to sort that
+            one too. Metrics sync automatically every so often after posting.
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          {!posts || posts.length === 0 ? (
-            <p className="text-sm text-slate-500">No published posts yet.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-slate-200 text-slate-500">
-                    <th className="py-2 pr-3 font-medium">Post</th>
-                    <th className="py-2 pr-3 font-medium">Hook</th>
-                    <th className="py-2 pr-3 font-medium">Niche</th>
-                    <th className="py-2 pr-3 font-medium">Posted</th>
-                    <th className="py-2 pr-3 text-right font-medium">Reach</th>
-                    <th className="py-2 pr-3 text-right font-medium">Likes</th>
-                    <th className="py-2 pr-3 text-right font-medium">Comments</th>
-                    <th className="py-2 pr-3 text-right font-medium">Shares</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {posts.map((p) => {
-                    const username = (p.creators as unknown as { username: string } | null)?.username;
-                    const text = Array.isArray(p.content_draft) ? (p.content_draft as string[]).join(" / ") : "";
-                    const preview = text.length > 80 ? `${text.slice(0, 80)}…` : text;
-                    const hooks = hookTypeLabels(p.hook_types as string[] | null).join(", ");
-                    return (
-                      <tr key={p.id} className="border-b border-slate-100 align-top">
-                        <td className="py-2 pr-3">
-                          <p className="text-slate-700">{preview || "(no text)"}</p>
-                          <p className="text-slate-400">
-                            @{username ?? "unknown"} · {p.post_type}
-                          </p>
-                        </td>
-                        <td className="py-2 pr-3 text-slate-600">{hooks || "—"}</td>
-                        <td className="py-2 pr-3 text-slate-600">{nicheLabel(p.niche as string | null) ?? "—"}</td>
-                        <td className="py-2 pr-3 text-slate-500">
-                          {p.posted_at ? <LocalDateTime iso={p.posted_at as string} /> : "—"}
-                        </td>
-                        <td className="py-2 pr-3 text-right text-slate-700">{p.metric_views ?? "—"}</td>
-                        <td className="py-2 pr-3 text-right text-slate-700">{p.metric_likes ?? "—"}</td>
-                        <td className="py-2 pr-3 text-right text-slate-700">{p.metric_replies ?? "—"}</td>
-                        <td className="py-2 pr-3 text-right text-slate-700">{p.metric_shares ?? "—"}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <PerformancePostsTable posts={postRows} />
         </CardContent>
       </Card>
     </div>

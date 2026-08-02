@@ -829,6 +829,13 @@ than invent a pattern that isn't really there. Stored as one row per user
 in `performance_insights` (latest analysis only, overwritten each time —
 same pattern as `creator_analysis`).
 
+**Posted posts & metrics table** (`components/performance-posts-table.tsx`):
+shows every posted post the query returns (not just a handful), split into
+two views — a **Top 10** list sortable by whichever metric you pick (Reach/
+Likes/Comments/Shares, tie-broken by most recent), and the full list below
+it with clickable column headers for the same sorting. Both sort entirely
+client-side over the already-fetched data, so switching metrics is instant.
+
 **Feeding back into generation:** `generateStyledPost` (shared by the
 manual Generate button, Schedules, the cron scheduler, and Spin) now
 accepts a `userId` and, when a `performance_insights` row exists, adds a
