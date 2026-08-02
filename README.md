@@ -880,6 +880,22 @@ The dashboard header nav (`components/dashboard-nav.tsx`) collapses into a
 hamburger menu below the `md` breakpoint instead of overflowing on phone
 widths.
 
+**Auto-refresh after a new deploy:** because the service worker caches
+hashed static assets, a tab left open across a Railway redeploy could
+otherwise keep running old JS indefinitely with no obvious sign anything's
+wrong. `lib/app-version.ts` captures a value once when the server process
+boots (Railway restarts that process on every deploy, so this changes
+exactly when a new version goes live); `components/version-watcher.tsx`
+(mounted in `app/dashboard/layout.tsx`) polls `/api/app-version` every 5
+minutes and, if it ever differs from the version the page was loaded with,
+shows a bottom banner with a 20-second countdown before automatically
+signing out and redirecting to `/login` with an explanation (a real
+sign-out via `signOutForUpdate` in `app/login/actions.ts`, not just a
+reload — guarantees a fresh Supabase session too). A "Refresh sekarang"
+button on the banner skips the wait. Only affects tabs left open across an
+actual deploy — a normal fresh page load always gets the current version
+regardless.
+
 **On generation feeling slow**: Generate post / Study / a schedule's Run
 now all call external APIs (Claude, and Gemini for images) that genuinely
 take a few seconds to 20+ seconds — that latency itself can't be

@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { signOut } from "@/app/login/actions";
 import { Button } from "@/components/ui/button";
 import { DashboardNav } from "@/components/dashboard-nav";
+import { VersionWatcher } from "@/components/version-watcher";
+import { APP_VERSION } from "@/lib/app-version";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient();
@@ -77,6 +79,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         </div>
       </header>
       <main className="mx-auto max-w-5xl p-4 sm:p-6">{children}</main>
+      <VersionWatcher initialVersion={APP_VERSION} />
     </div>
   );
 }
