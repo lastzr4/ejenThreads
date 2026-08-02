@@ -101,6 +101,12 @@ interface CreateContainerOptions {
   replyToId?: string;
   imageUrl?: string;
   /**
+   * Public URL of a video (MP4/MOV — see Threads' Video Specifications)
+   * to publish instead of an image. Mutually exclusive with imageUrl — if
+   * both are somehow set, videoUrl wins (checked first in buildBody).
+   */
+  videoUrl?: string;
+  /**
    * Long-form text (up to ~10,000 characters per Meta's September 2025
    * announcement — see about.fb.com/news/2025/09/attach-text-threads-posts-
    * share-longer-perspectives) attached to this one post, shown as
@@ -124,16 +130,21 @@ async function createContainer({
   text,
   replyToId,
   imageUrl,
+  videoUrl,
   textAttachment
 }: CreateContainerOptions): Promise<{ id: string; usedTextAttachment: boolean }> {
   const buildBody = (includeTextAttachment: boolean) => {
     const body = new URLSearchParams({
-      media_type: imageUrl ? "IMAGE" : "TEXT",
+      media_type: videoUrl ? "VIDEO" : imageUrl ? "IMAGE" : "TEXT",
       text,
       access_token: accessToken
     });
     if (replyToId) body.set("reply_to_id", replyToId);
-    if (imageUrl) body.set("image_url", imageUrl);
+    if (videoUrl) {
+      body.set("video_url", videoUrl);
+    } else if (imageUrl) {
+      body.set("image_url", imageUrl);
+    }
     if (includeTextAttachment && textAttachment) {
       body.set("text_attachment", JSON.stringify({ text: textAttachment }));
     }
@@ -244,12 +255,14 @@ function splitIntoChunks(text: string, maxLen = 450): string[] {
 }
 
 /**
- * Text-only containers are usually ready almost immediately, but Meta
+ * Text/image containers are usually ready almost immediately, but Meta
  * recommends checking status rather than assuming so — poll briefly before
- * publishing rather than guessing with a blind delay.
+ * publishing rather than guessing with a blind delay. Video containers take
+ * meaningfully longer to transcode (Meta's own guidance: "wait on average
+ * 30 seconds" — a floor, not a cap, for larger files), so callers publishing
+ * a video pass a higher maxAttempts (see publishThreadPosts).
  */
-async function waitForContainerReady(containerId: string, accessToken: string): Promise<void> {
-  const maxAttempts = 10;
+async function waitForContainerReady(containerId: string, accessToken: string, maxAttempts = 10): Promise<void> {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const url = new URL(`${GRAPH_BASE}/${containerId}`);
     url.searchParams.set("fields", "status,error_message");
@@ -400,11 +413,12 @@ export async function publishReply(
  * one's published id (reply_to_id) — this is how Threads represents a
  * multi-post "thread" from the same author.
  *
- * If imageUrl is given, only the FIRST post is published as an IMAGE
- * container (with that post's text as the caption) — any following thread
- * replies stay plain TEXT, since Threads represents a thread as a chain of
- * individually-typed posts rather than one post with a caption plus extra
- * text-only follow-ups.
+ * If imageUrl or videoUrl is given, only the FIRST post is published as an
+ * IMAGE/VIDEO container (with that post's text as the caption) — any
+ * following thread replies stay plain TEXT, since Threads represents a
+ * thread as a chain of individually-typed posts rather than one post with a
+ * caption plus extra text-only follow-ups. imageUrl and videoUrl are
+ * mutually exclusive — pass only one (videoUrl wins if both are set).
  *
  * If textAttachment is given, it's attached to the FIRST post first — but
  * confirmed in practice (2026-07-22, real publish to @h4niameen4) that
@@ -425,7 +439,8 @@ export async function publishThreadPosts(
   accessToken: string,
   posts: string[],
   imageUrl?: string | null,
-  textAttachment?: string | null
+  textAttachment?: string | null,
+  videoUrl?: string | null
 ): Promise<string> {
   if (posts.length === 0) {
     throw new ThreadsApiError("No post text to publish");
@@ -442,10 +457,14 @@ export async function publishThreadPosts(
         accessToken,
         text: posts[i],
         replyToId: previousPublishedId,
-        imageUrl: isFirst ? imageUrl ?? undefined : undefined,
+        imageUrl: isFirst && !videoUrl ? imageUrl ?? undefined : undefined,
+        videoUrl: isFirst ? videoUrl ?? undefined : undefined,
         textAttachment: isFirst ? textAttachment ?? undefined : undefined
       });
-      await waitForContainerReady(containerId, accessToken);
+      // Video containers take meaningfully longer to transcode than
+      // image/text ones — see waitForContainerReady's doc comment. 40
+      // attempts * 3s = up to 2 minutes, versus the 30s default.
+      await waitForContainerReady(containerId, accessToken, isFirst && videoUrl ? 40 : 10);
       const publishedId = await publishContainer(threadsUserId, accessToken, containerId);
 
       if (!rootId) rootId = publishedId;

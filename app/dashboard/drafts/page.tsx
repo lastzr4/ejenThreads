@@ -20,7 +20,7 @@ export default async function DraftsPage({
   const { data: drafts } = await supabase
     .from("scheduled_posts")
     .select(
-      "id, post_type, content_draft, image_url, image_urls, image_error, uploaded_image, text_attachment, status, error_message, threads_post_id, created_at, creators(username)"
+      "id, post_type, content_draft, image_url, image_urls, video_url, image_error, uploaded_image, text_attachment, status, error_message, threads_post_id, created_at, creators(username)"
     )
     .order("created_at", { ascending: false });
 
@@ -83,9 +83,13 @@ export default async function DraftsPage({
                     <CardTitle className="text-base">
                       {draft.post_type === "carousel"
                         ? `Carousel (${Array.isArray(draft.image_urls) ? draft.image_urls.length : 0} images)`
-                        : draft.post_type === "thread"
-                          ? `Thread (${posts.length} posts)`
-                          : "Single post"}
+                        : draft.video_url
+                          ? draft.post_type === "thread"
+                            ? `Video thread (${posts.length} posts)`
+                            : "Video post"
+                          : draft.post_type === "thread"
+                            ? `Thread (${posts.length} posts)`
+                            : "Single post"}
                     </CardTitle>
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs ${
@@ -109,6 +113,14 @@ export default async function DraftsPage({
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
+                  {draft.video_url && (
+                    <video
+                      src={draft.video_url}
+                      controls
+                      preload="metadata"
+                      className="max-h-80 w-full rounded-md border border-slate-100 bg-black"
+                    />
+                  )}
                   {draft.post_type === "carousel" && Array.isArray(draft.image_urls) && draft.image_urls.length > 0 ? (
                     <div className="space-y-1">
                       <div className="grid grid-cols-3 gap-1 sm:grid-cols-4">

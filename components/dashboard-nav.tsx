@@ -9,6 +9,7 @@ const LINKS = [
   { href: "/dashboard/creators", label: "Creators" },
   { href: "/dashboard/drafts", label: "Drafts" },
   { href: "/dashboard/image-generator", label: "Image Generator" },
+  { href: "/dashboard/tabur-link", label: "Tabur Link" },
   { href: "/dashboard/schedules", label: "Schedules" },
   { href: "/dashboard/performance", label: "Performance" },
   { href: "/dashboard/settings", label: "Settings" }

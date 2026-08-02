@@ -235,7 +235,7 @@ export async function approveAndPublishDraft(formData: FormData) {
 
   const { data: draft } = await supabase
     .from("scheduled_posts")
-    .select("id, user_id, content_draft, image_url, image_urls, text_attachment, status, post_type")
+    .select("id, user_id, content_draft, image_url, image_urls, video_url, text_attachment, status, post_type")
     .eq("id", id)
     .single();
 
@@ -267,7 +267,14 @@ export async function approveAndPublishDraft(formData: FormData) {
     const threadsPostId =
       draft.post_type === "carousel"
         ? await publishCarouselPost(threadsUserId, accessToken, posts[0] ?? "", imageUrls)
-        : await publishThreadPosts(threadsUserId, accessToken, posts, draft.image_url, draft.text_attachment);
+        : await publishThreadPosts(
+            threadsUserId,
+            accessToken,
+            posts,
+            draft.image_url,
+            draft.text_attachment,
+            draft.video_url
+          );
 
     await supabase
       .from("scheduled_posts")

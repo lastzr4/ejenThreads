@@ -565,6 +565,49 @@ shared/global, not per-user, so this deliberately checks everyone's rows —
 scoping it to just one user's own rows could delete a file someone else's
 draft still points at). Confirm-gated, same pattern as Drafts' Clear all.
 
+## Tabur Link
+
+A dedicated tab at **Dashboard → Tabur Link** (`app/dashboard/tabur-link/`)
+for affiliate-link posts: paste a Shopee affiliate link, pair it with a
+real video or photo, pick the creator whose style/niche/role/Jenis Hook to
+use, and get back an AI-styled caption — saved to Drafts for review, same
+as everywhere else (never auto-published, extra warranted here since it's
+republishing someone else's media asset).
+
+**Why the video isn't auto-downloaded from Shopee:** two real reasons, not
+just "too hard." First, technical — a listing's video lives behind the same
+JS-rendered page that already blocks this app's Playwright scraper for
+product photos (see Module 3's Shopee section) with an anti-bot
+verification wall; automating around that reliably isn't realistic.
+Second, and more fundamentally — the video belongs to the seller or
+whoever originally filmed it, and reposting it to a different platform
+without their consent is a real rights question that scraping harder
+doesn't solve. The sanctioned path is Shopee's own **Affiliate Center**
+(or Involve Asia, depending on how the affiliate account is set up):
+sellers who opt in provide creative assets there explicitly for affiliates
+to reuse. Download the video from there yourself, then upload it on this
+tab — same trust model as the existing "upload your own product photo"
+option elsewhere in the app.
+
+**Video publishing** (`lib/threads/publish.ts`, official Threads API):
+`media_type=VIDEO` with a public `video_url` — same two-step
+container-then-publish flow as an image post, just with a longer wait
+before checking if the container finished processing (video transcodes
+slower than an image; up to ~2 minutes vs. ~30 seconds). Format/size
+requirements per Meta's spec: MP4 or MOV, H264/HEVC, max 5 minutes, max
+1GB — this app caps uploads at 100MB itself (`app/dashboard/tabur-link/
+actions.ts`) since a short promo clip is what this is for, not a
+feature-length upload, and it keeps Supabase Storage costs down. Uploaded
+videos are stored permanently in the public `generated-videos` bucket
+(migration `0012_tabur_link_video.sql`), the same "nothing auto-deletes"
+pattern as `generated-images` — not yet included in the Settings → Storage
+cleanup sweep.
+
+If no video is uploaded, the tab falls back to the same photo flow as the
+main Generate post button — upload your own photo, or check "Generate
+image with AI" (with the same Shopee product-photo-library auto-reuse:
+give a link+photo once, it's remembered for next time).
+
 ## Module 4: Auto-Posting (Official Threads API + Schedules)
 
 This is the piece that actually posts to your real Threads account, fully
