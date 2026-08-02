@@ -10,6 +10,7 @@ const LINKS = [
   { href: "/dashboard/drafts", label: "Drafts" },
   { href: "/dashboard/image-generator", label: "Image Generator" },
   { href: "/dashboard/schedules", label: "Schedules" },
+  { href: "/dashboard/performance", label: "Performance" },
   { href: "/dashboard/settings", label: "Settings" }
 ];
 

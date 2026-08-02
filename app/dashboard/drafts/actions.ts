@@ -162,6 +162,7 @@ export async function spinDraft(formData: FormData) {
       niche: draft.niche ?? undefined,
       role: effectiveRole,
       hookTypes: draft.hook_types as string[] | null,
+      userId: user.id,
       generateImage: false,
       carouselImageCount
     });

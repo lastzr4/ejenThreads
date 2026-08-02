@@ -45,9 +45,13 @@ export async function GET(_request: NextRequest) {
   // (reply) post is attempted — confirmed as the actual root cause behind
   // every failed multi-post thread in this app so far (single, standalone
   // posts worked fine since they never call a reply endpoint).
+  // threads_manage_insights is required for GET calls to the Insights API
+  // (lib/threads/insights.ts) — the "Past performance" feature that reads
+  // real views/likes/replies/reposts/quotes/shares for posts this app
+  // published, so it can be fed back into future generation.
   authorizeUrl.searchParams.set(
     "scope",
-    "threads_basic,threads_content_publish,threads_manage_replies"
+    "threads_basic,threads_content_publish,threads_manage_replies,threads_manage_insights"
   );
   authorizeUrl.searchParams.set("response_type", "code");
   authorizeUrl.searchParams.set("state", user.id);

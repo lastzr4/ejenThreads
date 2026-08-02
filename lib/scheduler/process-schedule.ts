@@ -99,6 +99,7 @@ export async function processSchedule(
       niche: schedule.niche,
       role: schedule.role_prompt,
       hookTypes: schedule.hook_types,
+      userId: schedule.user_id,
       // Skip AI generation entirely when a fixed image (or fixed carousel
       // images) is set — it would just be thrown away below.
       generateImage: isCarousel

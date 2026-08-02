@@ -114,6 +114,7 @@ export async function generatePost(formData: FormData) {
       niche: niche || undefined,
       role: role || undefined,
       hookTypes: hookTypes.length > 0 ? hookTypes : undefined,
+      userId: user.id,
       generateImage:
         postType === "carousel"
           ? wantsImage && !hasCarouselUploads

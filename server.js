@@ -26,6 +26,7 @@ const handle = app.getRequestHandler();
 const TICK_INTERVAL_MS = 60_000;
 let tickInFlight = false;
 let autoCommentTickInFlight = false;
+let metricsSyncTickInFlight = false;
 
 async function runSchedulerTick(port) {
   if (tickInFlight) return; // previous tick still running — skip this one rather than overlap
@@ -68,6 +69,28 @@ async function runAutoCommentTick(port) {
   }
 }
 
+// "Past performance" metrics tick, same interval — its own in-flight flag
+// so a slow metrics sync never blocks/delays schedules or auto-comment (or
+// vice versa). syncPostMetricsForUser (via /api/cron/sync-metrics) bounds
+// its own work per user, so most calls are fast.
+async function runMetricsSyncTick(port) {
+  if (metricsSyncTickInFlight) return;
+  metricsSyncTickInFlight = true;
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/api/cron/sync-metrics`, {
+      method: "POST",
+      headers: process.env.CRON_SECRET ? { authorization: `Bearer ${process.env.CRON_SECRET}` } : {}
+    });
+    if (!res.ok) {
+      console.error(`[metrics-sync] tick returned ${res.status}`);
+    }
+  } catch (err) {
+    console.error("[metrics-sync] tick failed:", err);
+  } finally {
+    metricsSyncTickInFlight = false;
+  }
+}
+
 app.prepare().then(() => {
   createServer((req, res) => {
     const parsedUrl = parse(req.url, true);
@@ -76,5 +99,6 @@ app.prepare().then(() => {
     console.log(`> CopyCreator ready on port ${port}`);
     setInterval(() => runSchedulerTick(port), TICK_INTERVAL_MS);
     setInterval(() => runAutoCommentTick(port), TICK_INTERVAL_MS);
+    setInterval(() => runMetricsSyncTick(port), TICK_INTERVAL_MS);
   });
 });

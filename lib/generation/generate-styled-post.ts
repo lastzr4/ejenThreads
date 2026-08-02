@@ -102,6 +102,16 @@ export interface GenerateStyledPostParams {
    */
   hookTypes?: string[] | null;
   /**
+   * When given, looks up this user's latest "Past performance" analysis
+   * (see lib/generation/analyze-performance.ts — performance_insights
+   * table) and, if one exists, folds its recommendations into the prompt as
+   * a learned preference — this is the "AI remembers what works" loop:
+   * real engagement outcomes from past published posts quietly shaping
+   * future suggestions, not just a report the user has to read themselves.
+   * Optional and silently skipped if omitted or no analysis exists yet.
+   */
+  userId?: string | null;
+  /**
    * Optional override for the IMAGE specifically (separate from `role`,
    * which governs the post TEXT's shape/structure) — e.g. "seorang
    * perempuan nak dating pakai item ini". Only meaningful when an image is
@@ -177,6 +187,7 @@ export async function generateStyledPost({
   niche,
   role,
   hookTypes,
+  userId,
   generateImage: wantsImage = false,
   carouselImageCount = 3,
   imageDirection,
@@ -207,6 +218,21 @@ export async function generateStyledPost({
     .not("content_text", "is", null)
     .order("like_count", { ascending: false })
     .limit(5);
+
+  // "Past performance" learned preference — see PerformanceAnalysisResult
+  // doc comment above. Best-effort only: a missing row (no analysis
+  // generated yet) or a query error here should never block generation
+  // itself, so this is intentionally not awaited inside a try/catch that
+  // could throw — a plain optional query with a safe fallback.
+  const performanceInsights = userId
+    ? (
+        await supabase
+          .from("performance_insights")
+          .select("best_patterns, worst_patterns, timing_notes, recommendations")
+          .eq("user_id", userId)
+          .maybeSingle()
+      ).data
+    : null;
 
   const anthropic = getAnthropicClient();
 
@@ -266,6 +292,15 @@ export async function generateStyledPost({
       ? `REFERENCE KNOWLEDGE BASE (uploaded by the user for this creator — use this as background/source ` +
         `material; the post should draw on, reference, or revolve around facts and ideas from this content ` +
         `where it fits the topic, rather than only relying on generic style):\n${knowledgeBase}\n\n`
+      : "") +
+    (performanceInsights?.recommendations
+      ? `LEARNED FROM PAST PERFORMANCE (this user's own real published posts and their actual engagement — ` +
+        `weigh this alongside the style profile, don't override the creator's voice with it):\n` +
+        `${performanceInsights.recommendations}\n` +
+        (performanceInsights.best_patterns ? `What has worked: ${performanceInsights.best_patterns}\n` : "") +
+        (performanceInsights.worst_patterns ? `What hasn't worked: ${performanceInsights.worst_patterns}\n` : "") +
+        (performanceInsights.timing_notes ? `Timing notes: ${performanceInsights.timing_notes}\n` : "") +
+        `\n`
       : "") +
     (hasRole
       ? `ROLE / FORMAT INSTRUCTIONS (these take priority over generic formatting — follow them for the ` +

@@ -590,16 +590,20 @@ exactly for this.
    type that lets you add use cases works — pick "Other" if asked).
 2. In the app dashboard, add the **Threads** use case (also called "Access
    the Threads API").
-3. Under **Use cases → Customize → Threads API**, add both the
-   `threads_content_publish` permission **and** `threads_manage_replies`
-   (`threads_basic` is required and already included). Easy to miss
-   `threads_manage_replies` since a single post publishes fine without it —
-   but it's required for any reply (which is exactly how a Thread, or a
-   long single post that continues as reply/comment posts, gets posted).
-   Without it, Meta returns `"Application does not have permission for
-   this action"` the moment a second (reply) post is attempted — this bit
-   us in development: single posts worked, but every thread failed with
-   that exact error until this permission was added.
+3. Under **Use cases → Customize → Threads API**, add
+   `threads_content_publish`, `threads_manage_replies`, **and**
+   `threads_manage_insights` (`threads_basic` is required and already
+   included). Easy to miss `threads_manage_replies` since a single post
+   publishes fine without it — but it's required for any reply (which is
+   exactly how a Thread, or a long single post that continues as
+   reply/comment posts, gets posted). Without it, Meta returns
+   `"Application does not have permission for this action"` the moment a
+   second (reply) post is attempted — this bit us in development: single
+   posts worked, but every thread failed with that exact error until this
+   permission was added. `threads_manage_insights` is required for the
+   **Past performance** feature (below) to read real engagement metrics —
+   without it, metric syncing fails silently with a permission error in
+   the logs and the Performance page just never fills in.
 4. Under **Settings → Basic**, note your **Threads App ID** and **Threads
    App secret**.
 5. Still under Settings, add a **Client OAuth Setting → valid OAuth
@@ -616,13 +620,14 @@ are only required to publish on behalf of *other* people's public
 accounts. Posting to your own account (or any account added as a tester)
 works immediately on Standard/Development access.
 
-**If you connected Threads API before `threads_manage_replies` existed in
-your app's permission list**: your existing token was only ever granted
-the old, smaller scope — adding the permission in the App Dashboard alone
-isn't enough, since permissions are captured at the moment a user
-authorizes, not re-checked afterward. Go to **Dashboard → Settings →
-Threads API**, click **Disconnect**, then **Connect with Threads** again
-to go through the authorization window once more and get a new token that
+**If you connected Threads API before `threads_manage_replies` or
+`threads_manage_insights` existed in your app's permission list**: your
+existing token was only ever granted the old, smaller scope — adding the
+permission in the App Dashboard alone isn't enough, since permissions are
+captured at the moment a user authorizes, not re-checked afterward. Go to
+**Dashboard → Settings → Threads API**, click **Disconnect**, then
+**Connect with Threads** again to go through the authorization window once
+more and get a new token that
 actually includes it.
 
 Set in Railway → Variables (and `.env.local` if testing locally):
@@ -785,6 +790,54 @@ crosses into inauthentic-engagement/spam territory regardless of rate — it
 was considered and intentionally left out. What's built instead still gets
 you automated engagement, just through Meta's own sanctioned reply
 mechanism on posts you're already tracking.
+
+## Past Performance
+
+**Dashboard → Performance.** CopyCreator remembers what actually works —
+it reads real engagement numbers for posts this app published, has Claude
+analyze which hook types/niches/timing correlate with better results, and
+quietly folds that analysis into future generation instead of leaving it
+as a report nobody re-reads.
+
+**Metrics synced** (`lib/threads/insights.ts`, official Threads Insights
+API, `GET /{media-id}/insights`): Reach (`views` — Threads has no literal
+"reach" metric at the post level; views/times-displayed is the closest
+equivalent and is what's shown as Reach), Likes, Comments (`replies`),
+Shares, plus Reposts and Quotes tracked in the DB even though the table
+UI only surfaces the four the feature was asked for. `shares` and `views`
+are flagged by Meta as metrics still "in development" — can occasionally
+come back missing even on real posts; treated as just another value, not
+an error.
+
+**Syncing** (`lib/threads/sync-metrics.ts`, `app/api/cron/sync-metrics`,
+ticked every ~60s by the same `server.js` interval Module 4/Auto-Comment
+use): for each Threads-API-connected user, refreshes metrics for their
+posted posts that are either never-synced or last synced 3+ hours ago,
+limited to posts from the last 14 days (engagement mostly settles by
+then) and capped at 20 per tick — most ticks for most users touch nothing,
+which is expected. A **Sync metrics now** button on the Performance page
+triggers an immediate refresh instead of waiting.
+
+**Analysis** (`lib/generation/analyze-performance.ts`): once at least 5
+posted posts have synced metrics, click **Refresh analysis** — Claude
+looks at each post's hook type(s), niche, role, format, and posting
+day/time alongside its real engagement, and returns (in Malay, forced
+tool-use, same reliable pattern as Modules 2/3): a short summary, what's
+working and why, what isn't and why, any timing pattern, and 3-5 concrete
+recommendations. Explicitly instructed to say "not enough data" rather
+than invent a pattern that isn't really there. Stored as one row per user
+in `performance_insights` (latest analysis only, overwritten each time —
+same pattern as `creator_analysis`).
+
+**Feeding back into generation:** `generateStyledPost` (shared by the
+manual Generate button, Schedules, the cron scheduler, and Spin) now
+accepts a `userId` and, when a `performance_insights` row exists, adds a
+"LEARNED FROM PAST PERFORMANCE" block to the prompt with the
+recommendations/best-patterns/worst-patterns/timing notes — weighed
+alongside the creator's style profile, not overriding it. This is what
+makes it "the AI remembers what works" rather than just a dashboard: no
+extra toggle needed, every future post already benefits once an analysis
+exists.
 
 ## Mobile / PWA
 
