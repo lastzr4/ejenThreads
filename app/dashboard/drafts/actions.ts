@@ -115,7 +115,7 @@ export async function spinDraft(formData: FormData) {
 
   const { data: draft } = await supabase
     .from("scheduled_posts")
-    .select("id, creator_id, post_type, status, topic, niche, role_prompt, image_urls")
+    .select("id, creator_id, post_type, status, topic, niche, role_prompt, hook_types, image_urls")
     .eq("id", id)
     .single();
 
@@ -161,6 +161,7 @@ export async function spinDraft(formData: FormData) {
       postType,
       niche: draft.niche ?? undefined,
       role: effectiveRole,
+      hookTypes: draft.hook_types as string[] | null,
       generateImage: false,
       carouselImageCount
     });

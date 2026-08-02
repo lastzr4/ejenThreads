@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
 import { getAnthropicClient, ANTHROPIC_MODEL } from "@/lib/anthropic/client";
 import { nicheLabel } from "@/lib/niches";
+import { hookTypeGuidance } from "@/lib/hook-types";
 import { generateImage } from "@/lib/gemini/generate-image";
 import { uploadGeneratedImage } from "@/lib/storage/upload-image";
 import { extractShopeeUrl, fetchShopeeProductInfo } from "@/lib/shopee/fetch-product-image";
@@ -92,6 +93,15 @@ export interface GenerateStyledPostParams {
    */
   role?: string | null;
   /**
+   * One or more "Jenis Hook" presets (see lib/hook-types.ts — storytelling,
+   * FOMO, curiosity, social proof, etc.) steering how the post's OPENING is
+   * framed. Unlike `role` (overall shape/structure), this only governs the
+   * hook — the first line(s) that grab attention. Multiple values are
+   * blended into one cohesive opening rather than mechanically stacked.
+   * Unrecognized values are silently dropped (see hookTypeGuidance).
+   */
+  hookTypes?: string[] | null;
+  /**
    * Optional override for the IMAGE specifically (separate from `role`,
    * which governs the post TEXT's shape/structure) — e.g. "seorang
    * perempuan nak dating pakai item ini". Only meaningful when an image is
@@ -166,6 +176,7 @@ export async function generateStyledPost({
   postType,
   niche,
   role,
+  hookTypes,
   generateImage: wantsImage = false,
   carouselImageCount = 3,
   imageDirection,
@@ -218,6 +229,7 @@ export async function generateStyledPost({
   const wantsAffiliateHookFormat =
     !hasRole && (isAffiliateNiche || /https?:\/\/|\.com|\.my|shopee|tiktok/i.test(topic ?? ""));
   const hasLinksToTag = isAffiliateNiche || /https?:\/\/|\.com|\.my|shopee|tiktok/i.test(topic ?? "");
+  const hookGuidance = hookTypeGuidance(hookTypes);
   // 2-20 mirrors publishCarouselPost's own limits (lib/threads/publish.ts) —
   // clamped here too as a safety net in case a caller passes something out
   // of range instead of clamping it themselves.
@@ -274,6 +286,11 @@ export async function generateStyledPost({
               `followed by its own comment thread, so keep each part self-contained enough to read naturally ` +
               `as a continuation rather than a jarring cut.\n\n`)
       : "") +
+    (hookGuidance.length > 0
+      ? `HOOK STYLE for the opening (the first line(s) that grab attention)${
+          hookGuidance.length > 1 ? " — blend these naturally into ONE cohesive opening, don't mechanically stack them one after another" : ""
+        }:\n${hookGuidance.map((g) => `- ${g}`).join("\n")}\n\n`
+      : "") +
     (nicheDescription ? `Niche/category to write within: ${nicheDescription}\n\n` : "") +
     (topic
       ? `Topic to write about: ${topic}\n\n`
@@ -281,12 +298,17 @@ export async function generateStyledPost({
         (nicheDescription ? ` and the niche above` : "") +
         `.\n\n`) +
     (wantsAffiliateHookFormat
-      ? `AFFILIATE POST FORMAT: open with a short, punchy, emotionally relatable hook (1-2 sentences) — ` +
-        `Malaysian social-media style often uses an ironic "plot twist" framing (expecting something bad, ` +
-        `pleasantly surprised, or vice versa), ending with an emotive emoji if it fits the creator's style. ` +
-        `Then, on separate lines, tag every product/link exactly as given in the topic above using the format ` +
-        `"🏷️<Product name> : <link>" — one line per product. Never invent, shorten, or alter a link; only ` +
-        `reproduce links that were actually given in the topic text.\n\n`
+      ? (hookGuidance.length > 0
+          ? `AFFILIATE POST FORMAT: after the opening (follow the HOOK STYLE above for it — don't use a ` +
+            `different hook style here), on separate lines, tag every product/link exactly as given in the ` +
+            `topic above using the format "🏷️<Product name> : <link>" — one line per product. Never invent, ` +
+            `shorten, or alter a link; only reproduce links that were actually given in the topic text.\n\n`
+          : `AFFILIATE POST FORMAT: open with a short, punchy, emotionally relatable hook (1-2 sentences) — ` +
+            `Malaysian social-media style often uses an ironic "plot twist" framing (expecting something bad, ` +
+            `pleasantly surprised, or vice versa), ending with an emotive emoji if it fits the creator's style. ` +
+            `Then, on separate lines, tag every product/link exactly as given in the topic above using the ` +
+            `format "🏷️<Product name> : <link>" — one line per product. Never invent, shorten, or alter a ` +
+            `link; only reproduce links that were actually given in the topic text.\n\n`)
       : hasRole && hasLinksToTag
         ? `Somewhere that fits the role/format above (e.g. near the end, as a natural pivot to a ` +
           `recommendation), tag every product/link exactly as given in the topic using the format ` +

@@ -330,6 +330,21 @@ the manual Generate form and Schedules (persisted as
 `posting_schedules.role_prompt`, so a recurring schedule keeps using the
 same persona every run).
 
+**Jenis Hook (optional, pick one or more)** (`lib/hook-types.ts`): unlike
+Role (overall shape/structure), this only steers the post's *opening* — the
+first line(s) that grab attention. Twelve presets: Storytelling, FOMO,
+Problem Solution, Curiosity, Social Proof, Transformation, Vulnerable, Bold
+Statement, Relatable Struggle, Negative/Reverse, Result First, and
+Controversy Spike. Selecting more than one doesn't stack them mechanically —
+the prompt explicitly asks Claude to blend the selected styles into one
+cohesive opening. Leave all unchecked to let Claude pick its own hook style
+as before. When the Affiliate hook format above also applies, the two don't
+fight — the generic "plot twist" hook wording is skipped in favor of
+whichever Jenis Hook style(s) were picked, while the product-tagging lines
+still get added afterward either way. Available on both the manual Generate
+form and Schedules (persisted as `posting_schedules.hook_types`), and
+carried over automatically when a draft is Spun.
+
 **Real product photo for Shopee links (Arahan gambar)**: pasting a raw
 Shopee link in Topic used to produce an AI-imagined image with no relation
 to the actual product — Claude can't open a link, so it was only ever

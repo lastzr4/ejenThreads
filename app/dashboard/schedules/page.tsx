@@ -4,6 +4,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { PendingBanner } from "@/components/pending-banner";
 import { LocalDateTime } from "@/components/local-datetime";
 import { NICHE_OPTIONS, nicheLabel } from "@/lib/niches";
+import { HOOK_TYPE_OPTIONS, hookTypeLabels } from "@/lib/hook-types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -31,7 +32,7 @@ export default async function SchedulesPage({
     supabase
       .from("posting_schedules")
       .select(
-        "id, creator_id, interval_hours, post_type, topic, niche, role_prompt, generate_image, fixed_image_url, fixed_image_urls, carousel_image_count, require_approval, is_active, next_run_at, last_run_at, last_result, last_error, creators(username)"
+        "id, creator_id, interval_hours, post_type, topic, niche, role_prompt, hook_types, generate_image, fixed_image_url, fixed_image_urls, carousel_image_count, require_approval, is_active, next_run_at, last_run_at, last_result, last_error, creators(username)"
       )
       .order("created_at", { ascending: false })
   ]);
@@ -150,6 +151,20 @@ export default async function SchedulesPage({
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-600">
+                  Jenis Hook (optional) — pick one or more; AI blends them naturally into every run&apos;s
+                  opening instead of picking a random hook style itself
+                </label>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 rounded-md border border-slate-200 bg-white p-3 sm:grid-cols-3">
+                  {HOOK_TYPE_OPTIONS.map((opt) => (
+                    <label key={opt.value} className="flex items-center gap-1.5 text-xs text-slate-600">
+                      <input type="checkbox" name="hookTypes" value={opt.value} className="rounded border-slate-300" />
+                      {opt.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
                   Upload a fixed image (optional, Single/Thread only) — reused for every run instead of AI
                   generation
                 </label>
@@ -255,6 +270,11 @@ export default async function SchedulesPage({
                     </span>
                     {schedule.role_prompt && (
                       <span className="block italic text-slate-500">Role: {schedule.role_prompt}</span>
+                    )}
+                    {schedule.hook_types && (schedule.hook_types as string[]).length > 0 && (
+                      <span className="block italic text-slate-500">
+                        Hook: {hookTypeLabels(schedule.hook_types as string[]).join(", ")}
+                      </span>
                     )}
                     {schedule.fixed_image_url && (
                       // eslint-disable-next-line @next/next/no-img-element

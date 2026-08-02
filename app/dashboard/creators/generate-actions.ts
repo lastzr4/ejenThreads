@@ -17,6 +17,7 @@ export async function generatePost(formData: FormData) {
     rawPostType === "thread" ? "thread" : rawPostType === "carousel" ? "carousel" : "single";
   const niche = String(formData.get("niche") ?? "").trim();
   const role = String(formData.get("role") ?? "").trim();
+  const hookTypes = formData.getAll("hookTypes").map((v) => String(v));
   const imageDirection = String(formData.get("imageDirection") ?? "").trim();
   const wantsImage = formData.get("generateImage") === "on";
   const uploadedImageFile = formData.get("uploadedImage");
@@ -112,6 +113,7 @@ export async function generatePost(formData: FormData) {
       postType,
       niche: niche || undefined,
       role: role || undefined,
+      hookTypes: hookTypes.length > 0 ? hookTypes : undefined,
       generateImage:
         postType === "carousel"
           ? wantsImage && !hasCarouselUploads
@@ -196,6 +198,7 @@ export async function generatePost(formData: FormData) {
         topic: topic || null,
         niche: niche || null,
         role_prompt: role || null,
+        hook_types: hookTypes.length > 0 ? hookTypes : null,
         image_direction: imageDirection || null,
         status: "draft"
       });

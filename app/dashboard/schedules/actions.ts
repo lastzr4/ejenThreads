@@ -17,6 +17,7 @@ export async function createSchedule(formData: FormData) {
   const topic = String(formData.get("topic") ?? "").trim();
   const niche = String(formData.get("niche") ?? "").trim();
   const role = String(formData.get("role") ?? "").trim();
+  const hookTypes = formData.getAll("hookTypes").map((v) => String(v));
   const generateImage = formData.get("generateImage") === "on";
   // Default is "require approval" (checkbox checked) unless the user
   // explicitly unchecks it — a plain <input type="checkbox"> only appears
@@ -110,6 +111,7 @@ export async function createSchedule(formData: FormData) {
     topic: topic || null,
     niche: niche || null,
     role_prompt: role || null,
+    hook_types: hookTypes.length > 0 ? hookTypes : null,
     generate_image: generateImage,
     fixed_image_url: fixedImageUrl,
     fixed_image_urls: fixedImageUrls,
@@ -176,7 +178,7 @@ export async function runScheduleNow(formData: FormData) {
   const { data: schedule } = await supabase
     .from("posting_schedules")
     .select(
-      "id, user_id, creator_id, interval_hours, post_type, topic, niche, role_prompt, generate_image, fixed_image_url, fixed_image_urls, carousel_image_count, require_approval"
+      "id, user_id, creator_id, interval_hours, post_type, topic, niche, role_prompt, hook_types, generate_image, fixed_image_url, fixed_image_urls, carousel_image_count, require_approval"
     )
     .eq("id", id)
     .single();

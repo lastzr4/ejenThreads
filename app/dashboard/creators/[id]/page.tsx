@@ -10,6 +10,7 @@ import { PendingBanner } from "@/components/pending-banner";
 import { Button } from "@/components/ui/button";
 import { LocalDateTime } from "@/components/local-datetime";
 import { NICHE_OPTIONS } from "@/lib/niches";
+import { HOOK_TYPE_OPTIONS } from "@/lib/hook-types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default async function CreatorDetailPage({
@@ -269,6 +270,20 @@ export default async function CreatorDetailPage({
                   placeholder="Leave blank to just use this creator's usual post format"
                   className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
                 />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  Jenis Hook (optional) — pick one or more; AI blends them naturally into the post&apos;s
+                  opening instead of picking a random hook style itself
+                </label>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 rounded-md border border-slate-200 bg-white p-3 sm:grid-cols-3">
+                  {HOOK_TYPE_OPTIONS.map((opt) => (
+                    <label key={opt.value} className="flex items-center gap-1.5 text-xs text-slate-600">
+                      <input type="checkbox" name="hookTypes" value={opt.value} className="rounded border-slate-300" />
+                      {opt.label}
+                    </label>
+                  ))}
+                </div>
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-600">

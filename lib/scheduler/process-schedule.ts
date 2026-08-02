@@ -20,6 +20,12 @@ export interface ScheduleRow {
   topic: string | null;
   niche?: string | null;
   role_prompt?: string | null;
+  /**
+   * One or more "Jenis Hook" preset values (see lib/hook-types.ts) reused
+   * on every run of this schedule — same idea as role_prompt/niche, just
+   * governing the opening/hook specifically instead of overall shape.
+   */
+  hook_types?: string[] | null;
   generate_image?: boolean | null;
   /**
    * A user-uploaded image, set once at schedule-creation time (see
@@ -92,6 +98,7 @@ export async function processSchedule(
       postType: schedule.post_type as "single" | "thread" | "carousel",
       niche: schedule.niche,
       role: schedule.role_prompt,
+      hookTypes: schedule.hook_types,
       // Skip AI generation entirely when a fixed image (or fixed carousel
       // images) is set — it would just be thrown away below.
       generateImage: isCarousel
@@ -127,6 +134,7 @@ export async function processSchedule(
         topic: schedule.topic ?? null,
         niche: schedule.niche ?? null,
         role_prompt: schedule.role_prompt ?? null,
+        hook_types: schedule.hook_types ?? null,
         status: "pending_review"
       });
       if (insertError) throw new Error(insertError.message);
@@ -177,6 +185,7 @@ export async function processSchedule(
         topic: schedule.topic ?? null,
         niche: schedule.niche ?? null,
         role_prompt: schedule.role_prompt ?? null,
+        hook_types: schedule.hook_types ?? null,
         status: "failed",
         threads_post_id: isPartial ? publishErr.rootId : null,
         error_message: publishErr instanceof Error ? publishErr.message : "Publish failed"
@@ -198,6 +207,7 @@ export async function processSchedule(
       topic: schedule.topic ?? null,
       niche: schedule.niche ?? null,
       role_prompt: schedule.role_prompt ?? null,
+      hook_types: schedule.hook_types ?? null,
       status: "posted",
       threads_post_id: threadsPostId,
       posted_at: new Date().toISOString()
