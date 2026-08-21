@@ -52,8 +52,17 @@ export function VersionWatcher({ initialVersion }: { initialVersion: string }) {
 
   if (!updateDetected) return null;
 
+  // Rendered in normal document flow (not fixed) so it can never overlay the
+  // fixed-bottom PWA install prompt (components/pwa-install-prompt.tsx) or
+  // anything else on screen — it just pushes the header down when it
+  // appears, and takes zero space otherwise since the component returns
+  // null until an update is actually detected.
   return (
-    <div className="fixed inset-x-0 bottom-0 z-50 flex flex-wrap items-center justify-center gap-3 bg-amber-600 px-4 py-3 text-center text-sm text-white">
+    <div
+      role="status"
+      aria-live="polite"
+      className="flex flex-wrap items-center justify-center gap-3 bg-amber-600 px-4 py-3 text-center text-sm text-white"
+    >
       <span>
         Kemaskini baru CopyCreator tersedia — log keluar automatik dalam {countdown} saat untuk refresh.
       </span>

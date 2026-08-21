@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { updateDraftContent } from "@/app/dashboard/drafts/actions";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { SubmitButton } from "@/components/submit-button";
 
 interface EditDraftFormProps {
@@ -59,27 +61,19 @@ export function EditDraftForm({ id, posts, textAttachment }: EditDraftFormProps)
       {posts.map((text, i) => (
         <div key={i}>
           {posts.length > 1 && (
-            <label className="mb-1 block text-xs font-medium text-slate-600">Post {i + 1}</label>
+            <Label htmlFor={`editPost${i}`} className="mb-1 block text-xs font-medium text-slate-600">
+              Post {i + 1}
+            </Label>
           )}
-          <textarea
-            name="posts"
-            defaultValue={text}
-            rows={4}
-            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
-          />
+          <Textarea id={`editPost${i}`} name="posts" defaultValue={text} rows={4} />
         </div>
       ))}
       {textAttachment !== null && (
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-600">
+          <Label htmlFor="editTextAttachment" className="mb-1 block text-xs font-medium text-slate-600">
             Full story (long-form attachment)
-          </label>
-          <textarea
-            name="textAttachment"
-            defaultValue={textAttachment}
-            rows={6}
-            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
-          />
+          </Label>
+          <Textarea id="editTextAttachment" name="textAttachment" defaultValue={textAttachment} rows={6} />
         </div>
       )}
       <div className="flex items-center gap-2">

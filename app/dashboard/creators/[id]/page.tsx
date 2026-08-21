@@ -8,6 +8,10 @@ import { uploadKnowledgeBase, addKnowledgeBaseFromUrl, clearKnowledgeBase } from
 import { SubmitButton } from "@/components/submit-button";
 import { PendingBanner } from "@/components/pending-banner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { LocalDateTime } from "@/components/local-datetime";
 import { NICHE_OPTIONS } from "@/lib/niches";
 import { HOOK_TYPE_OPTIONS } from "@/lib/hook-types";
@@ -175,7 +179,11 @@ export default async function CreatorDetailPage({
           )}
           <form action={uploadKnowledgeBase} className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <input type="hidden" name="creatorId" value={creator.id} />
+            <Label htmlFor="knowledgeFile" className="sr-only">
+              PDF file
+            </Label>
             <input
+              id="knowledgeFile"
               type="file"
               name="knowledgeFile"
               accept="application/pdf"
@@ -193,12 +201,16 @@ export default async function CreatorDetailPage({
           </div>
           <form action={addKnowledgeBaseFromUrl} className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <input type="hidden" name="creatorId" value={creator.id} />
-            <input
+            <Label htmlFor="knowledgeUrl" className="sr-only">
+              Webpage URL
+            </Label>
+            <Input
+              id="knowledgeUrl"
               type="url"
               name="knowledgeUrl"
               placeholder="https://example.com/some-article"
               required
-              className="w-full flex-1 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
+              className="flex-1"
             />
             <SubmitButton size="sm" pendingText="Fetching page…">
               Add URL
@@ -220,55 +232,51 @@ export default async function CreatorDetailPage({
             <form action={generatePost} className="space-y-3">
               <input type="hidden" name="id" value={creator.id} />
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">
+                <Label htmlFor="topic" className="mb-1 block text-xs font-medium text-slate-600">
                   Topic (optional — e.g. a product, link, or idea to write about)
-                </label>
-                <textarea
+                </Label>
+                <Textarea
+                  id="topic"
                   name="topic"
                   rows={2}
                   placeholder="Leave blank to let it pick a topic that fits this creator's usual themes"
-                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
                 />
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">Niche (optional)</label>
-                  <select
-                    name="niche"
-                    defaultValue=""
-                    className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
-                  >
+                  <Label htmlFor="niche" className="mb-1 block text-xs font-medium text-slate-600">
+                    Niche (optional)
+                  </Label>
+                  <Select id="niche" name="niche" defaultValue="">
                     {NICHE_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>
                         {opt.label}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">Format</label>
-                  <select
-                    name="postType"
-                    defaultValue="single"
-                    className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
-                  >
+                  <Label htmlFor="postType" className="mb-1 block text-xs font-medium text-slate-600">
+                    Format
+                  </Label>
+                  <Select id="postType" name="postType" defaultValue="single">
                     <option value="single">Single post</option>
                     <option value="thread">Thread</option>
                     <option value="carousel">Carousel (multi-image)</option>
-                  </select>
+                  </Select>
                 </div>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">
+                <Label htmlFor="role" className="mb-1 block text-xs font-medium text-slate-600">
                   Role / arahan khusus (optional) — overrides the format/structure, e.g. &quot;This account is
                   a professional short-story (cerpen) writer, ending each story with an affiliate product
                   plug.&quot;
-                </label>
-                <textarea
+                </Label>
+                <Textarea
+                  id="role"
                   name="role"
                   rows={3}
                   placeholder="Leave blank to just use this creator's usual post format"
-                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
                 />
               </div>
               <div>
@@ -286,14 +294,15 @@ export default async function CreatorDetailPage({
                 </div>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">
+                <Label htmlFor="uploadedImage" className="mb-1 block text-xs font-medium text-slate-600">
                   Upload your own image (optional, Single/Thread only) — used as-is if &quot;Generate
                   image(s) with AI&quot; below is OFF. If that&apos;s ON too, this becomes a reference photo
                   instead: AI keeps the real product accurate but builds a fresh, more engaging scene around
                   it (recommended for product photos saved from a listing yourself — more reliable than
                   auto-fetching from a Shopee link).
-                </label>
+                </Label>
                 <input
+                  id="uploadedImage"
                   type="file"
                   name="uploadedImage"
                   accept="image/*"
@@ -303,10 +312,11 @@ export default async function CreatorDetailPage({
               <div className="rounded-md border border-slate-100 bg-slate-50 p-3 space-y-3">
                 <p className="text-xs font-medium text-slate-600">Carousel format only (ignored otherwise)</p>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">
+                  <Label htmlFor="carouselImages" className="mb-1 block text-xs font-medium text-slate-600">
                     Upload your own images (2-20) — used instead of AI generation if provided
-                  </label>
+                  </Label>
                   <input
+                    id="carouselImages"
                     type="file"
                     name="carouselImages"
                     accept="image/*"
@@ -315,35 +325,36 @@ export default async function CreatorDetailPage({
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">
+                  <Label htmlFor="carouselImageCount" className="mb-1 block text-xs font-medium text-slate-600">
                     Number of AI images to generate (if not uploading your own above)
-                  </label>
-                  <select
+                  </Label>
+                  <Select
+                    id="carouselImageCount"
                     name="carouselImageCount"
                     defaultValue="3"
-                    className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400 sm:w-40"
+                    className="sm:w-40"
                   >
                     {[2, 3, 4, 5, 6, 8, 10].map((n) => (
                       <option key={n} value={n}>
                         {n} images
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">
+                <Label htmlFor="imageDirection" className="mb-1 block text-xs font-medium text-slate-600">
                   Arahan gambar (optional, Single/Thread only) — overrides the SCENE/context the image
                   builds, e.g. &quot;seorang perempuan nak dating pakai item ini&quot;. If the Topic has a
                   Shopee link, the real product photo is used as reference (accurate appearance) and this
                   just directs the lifestyle scene around it — aim for something with viral/high-engagement
                   potential.
-                </label>
-                <textarea
+                </Label>
+                <Textarea
+                  id="imageDirection"
                   name="imageDirection"
                   rows={2}
                   placeholder="Leave blank to let AI decide the scene"
-                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
                 />
               </div>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">

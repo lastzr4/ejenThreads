@@ -6,6 +6,9 @@ import { SubmitButton } from "@/components/submit-button";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { LocalDateTime } from "@/components/local-datetime";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default async function SettingsPage({
@@ -136,12 +139,18 @@ export default async function SettingsPage({
           </div>
 
           <form action={saveThreadsSession} className="space-y-3">
-            <textarea
-              name="sessionJson"
-              rows={6}
-              placeholder='{"cookies": [...], "origins": [...]}'
-              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 font-mono text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
-            />
+            <div>
+              <Label htmlFor="sessionJson" className="mb-1 block text-xs font-medium text-slate-600">
+                Session JSON
+              </Label>
+              <Textarea
+                id="sessionJson"
+                name="sessionJson"
+                rows={6}
+                placeholder='{"cookies": [...], "origins": [...]}'
+                className="font-mono text-xs"
+              />
+            </div>
             <div className="flex items-center gap-3">
               <SubmitButton pendingText="Saving…">
                 {connected ? "Replace session" : "Save session"}
@@ -151,9 +160,14 @@ export default async function SettingsPage({
 
           {connected && (
             <form action={clearThreadsSession}>
-              <Button variant="ghost" size="sm" type="submit">
+              <ConfirmSubmitButton
+                variant="destructive"
+                size="sm"
+                pendingText="Disconnecting…"
+                confirmMessage="Disconnect this Threads session? Scraping will fall back to anonymous (~3-4 posts per creator) until you reconnect."
+              >
                 Disconnect
-              </Button>
+              </ConfirmSubmitButton>
             </form>
           )}
 
@@ -234,9 +248,14 @@ export default async function SettingsPage({
             </a>
             {apiConnected && (
               <form action={disconnectThreadsApi}>
-                <Button variant="ghost" size="sm" type="submit">
+                <ConfirmSubmitButton
+                  variant="destructive"
+                  size="sm"
+                  pendingText="Disconnecting…"
+                  confirmMessage="Disconnect the Threads API? Schedules and Auto-Comment can't publish until you reconnect."
+                >
                   Disconnect
-                </Button>
+                </ConfirmSubmitButton>
               </form>
             )}
           </div>
@@ -273,39 +292,45 @@ export default async function SettingsPage({
             </label>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <label className="block text-xs">
-                <span className="mb-1 block font-medium text-slate-600">Daily limit (comments/day)</span>
-                <input
+              <div>
+                <Label htmlFor="dailyLimit" className="mb-1 block text-xs font-medium text-slate-600">
+                  Daily limit (comments/day)
+                </Label>
+                <Input
+                  id="dailyLimit"
                   type="number"
                   name="dailyLimit"
                   min={1}
                   max={200}
                   defaultValue={autoCommentDailyLimit}
-                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
                 />
-              </label>
-              <label className="block text-xs">
-                <span className="mb-1 block font-medium text-slate-600">Min delay (minutes)</span>
-                <input
+              </div>
+              <div>
+                <Label htmlFor="delayMin" className="mb-1 block text-xs font-medium text-slate-600">
+                  Min delay (minutes)
+                </Label>
+                <Input
+                  id="delayMin"
                   type="number"
                   name="delayMin"
                   min={1}
                   max={1440}
                   defaultValue={autoCommentDelayMin}
-                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
                 />
-              </label>
-              <label className="block text-xs">
-                <span className="mb-1 block font-medium text-slate-600">Max delay (minutes)</span>
-                <input
+              </div>
+              <div>
+                <Label htmlFor="delayMax" className="mb-1 block text-xs font-medium text-slate-600">
+                  Max delay (minutes)
+                </Label>
+                <Input
+                  id="delayMax"
                   type="number"
                   name="delayMax"
                   min={1}
                   max={1440}
                   defaultValue={autoCommentDelayMax}
-                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
                 />
-              </label>
+              </div>
             </div>
             <p className="text-xs text-slate-500">
               A random wait between the min and max is used after every comment, so replies go out spaced
@@ -370,7 +395,7 @@ export default async function SettingsPage({
         <CardContent>
           <form action={cleanupUnusedGeneratedImages}>
             <ConfirmSubmitButton
-              variant="outline"
+              variant="destructive"
               size="sm"
               pendingText="Cleaning up…"
               confirmMessage="Delete every stored image that no draft or schedule currently uses? Images still referenced anywhere are kept — only truly unused ones are removed. This can't be undone."
@@ -394,24 +419,18 @@ export default async function SettingsPage({
         <CardContent className="space-y-4">
           <form action={addProductPhoto} className="space-y-3">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <label className="block text-xs">
-                <span className="mb-1 block font-medium text-slate-600">Shopee link</span>
-                <input
-                  type="text"
-                  name="shopeeUrl"
-                  placeholder="https://s.shopee.com.my/..."
-                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
-                />
-              </label>
-              <label className="block text-xs">
-                <span className="mb-1 block font-medium text-slate-600">Real product photo</span>
-                <input
-                  type="file"
-                  name="photo"
-                  accept="image/*"
-                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
-                />
-              </label>
+              <div>
+                <Label htmlFor="shopeeUrl" className="mb-1 block text-xs font-medium text-slate-600">
+                  Shopee link
+                </Label>
+                <Input id="shopeeUrl" type="text" name="shopeeUrl" placeholder="https://s.shopee.com.my/..." />
+              </div>
+              <div>
+                <Label htmlFor="photo" className="mb-1 block text-xs font-medium text-slate-600">
+                  Real product photo
+                </Label>
+                <Input id="photo" type="file" name="photo" accept="image/*" className="py-1.5" />
+              </div>
             </div>
             <SubmitButton size="sm" pendingText="Saving…">
               Save product photo
@@ -448,9 +467,14 @@ export default async function SettingsPage({
                     </div>
                     <form action={deleteProductPhoto}>
                       <input type="hidden" name="id" value={p.id as string} />
-                      <Button variant="ghost" size="sm" type="submit">
+                      <ConfirmSubmitButton
+                        variant="destructive"
+                        size="sm"
+                        pendingText="Deleting…"
+                        confirmMessage="Delete this saved product photo? Generate post will fall back to auto-scraping (or AI generation) for this product next time."
+                      >
                         Delete
-                      </Button>
+                      </ConfirmSubmitButton>
                     </form>
                   </div>
                 ))}

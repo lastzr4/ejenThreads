@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { deleteDraft, approveAndPublishDraft, clearDrafts } from "./actions";
-import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/submit-button";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -34,7 +33,7 @@ export default async function DraftsPage({
           {clearableCount > 0 && (
             <form action={clearDrafts}>
               <ConfirmSubmitButton
-                variant="outline"
+                variant="destructive"
                 size="sm"
                 pendingText="Clearing…"
                 confirmMessage={`Delete all ${clearableCount} row${
@@ -203,9 +202,18 @@ export default async function DraftsPage({
                     <CopyDraftButton posts={posts} textAttachment={draft.text_attachment} />
                     <form action={deleteDraft}>
                       <input type="hidden" name="id" value={draft.id} />
-                      <Button variant="ghost" size="sm" type="submit">
+                      <ConfirmSubmitButton
+                        variant="destructive"
+                        size="sm"
+                        pendingText="Deleting…"
+                        confirmMessage={
+                          draft.status === "posted"
+                            ? "Delete this draft's record? It's already live on Threads — this only removes CopyCreator's own history, it does not unpublish it."
+                            : "Delete this draft? This can't be undone."
+                        }
+                      >
                         Delete
-                      </Button>
+                      </ConfirmSubmitButton>
                     </form>
                   </div>
                 </CardContent>

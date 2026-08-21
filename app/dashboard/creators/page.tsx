@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { addCreator, deleteCreator } from "./actions";
+import { addCreator, deleteCreator, toggleCreatorActive } from "./actions";
 import { SubmitButton } from "@/components/submit-button";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
+import { Button } from "@/components/ui/button";
 import { LocalDateTime } from "@/components/local-datetime";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +17,7 @@ export default async function CreatorsPage({
   const supabase = createClient();
   const { data: creators, error } = await supabase
     .from("creators")
-    .select("id, username, display_name, last_scraped_at, created_at")
+    .select("id, username, display_name, last_scraped_at, created_at, is_active")
     .order("created_at", { ascending: false });
 
   // Per-creator totals (posts scraped + summed reply/comment counts) for
@@ -72,14 +74,23 @@ export default async function CreatorsPage({
             const stats = statsByCreator.get(creator.id);
             return (
             <Card key={creator.id}>
-              <CardContent className="flex items-center justify-between p-4">
+              <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
                 <div>
-                  <Link
-                    href={`/dashboard/creators/${creator.id}`}
-                    className="font-medium hover:underline"
-                  >
-                    @{creator.username}
-                  </Link>
+                  <div className="flex items-center gap-2">
+                    <Link
+                      href={`/dashboard/creators/${creator.id}`}
+                      className="font-medium hover:underline"
+                    >
+                      @{creator.username}
+                    </Link>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs ${
+                        creator.is_active ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      {creator.is_active ? "Active" : "Paused"}
+                    </span>
+                  </div>
                   <p className="text-xs text-slate-500">
                     {creator.last_scraped_at ? (
                       <>
@@ -91,14 +102,33 @@ export default async function CreatorsPage({
                     {stats && stats.posts > 0 && (
                       <> · {stats.posts} post{stats.posts === 1 ? "" : "s"} scraped · {stats.replies} replies</>
                     )}
+                    {!creator.is_active && " · Paused: skipped by Auto-Comment"}
                   </p>
                 </div>
-                <form action={deleteCreator}>
-                  <input type="hidden" name="id" value={creator.id} />
-                  <SubmitButton variant="ghost" size="sm" pendingText="Removing…">
-                    Remove
-                  </SubmitButton>
-                </form>
+                <div className="flex shrink-0 items-center gap-2">
+                  <form action={toggleCreatorActive}>
+                    <input type="hidden" name="id" value={creator.id} />
+                    <input type="hidden" name="isActive" value={String(creator.is_active)} />
+                    <Button variant="outline" size="sm" type="submit">
+                      {creator.is_active ? "Pause" : "Resume"}
+                    </Button>
+                  </form>
+                  <form action={deleteCreator}>
+                    <input type="hidden" name="id" value={creator.id} />
+                    <ConfirmSubmitButton
+                      variant="destructive"
+                      size="sm"
+                      pendingText="Removing…"
+                      confirmMessage={
+                        stats && stats.posts > 0
+                          ? `Remove @${creator.username}? This permanently deletes ${stats.posts} scraped post${stats.posts === 1 ? "" : "s"} and any style analysis for this creator.`
+                          : `Remove @${creator.username}?`
+                      }
+                    >
+                      Remove
+                    </ConfirmSubmitButton>
+                  </form>
+                </div>
               </CardContent>
             </Card>
             );

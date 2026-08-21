@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { spinDraft } from "@/app/dashboard/drafts/actions";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { SubmitButton } from "@/components/submit-button";
 
 interface SpinDraftFormProps {
@@ -34,15 +36,15 @@ export function SpinDraftForm({ id }: SpinDraftFormProps) {
       className="w-full space-y-2 rounded-md border border-slate-200 bg-white p-3"
     >
       <input type="hidden" name="id" value={id} />
-      <label className="mb-1 block text-xs font-medium text-slate-600">
+      <Label htmlFor={`spinComment${id}`} className="mb-1 block text-xs font-medium text-slate-600">
         Extra direction (optional) — e.g. &quot;buat lebih lucu&quot;, &quot;tambah statistik&quot;,
         &quot;fokus pada masalah X&quot;. The image stays the same — only the text gets rewritten.
-      </label>
-      <textarea
+      </Label>
+      <Textarea
+        id={`spinComment${id}`}
         name="comment"
         rows={2}
         placeholder="Leave blank to just get a fresh rewrite in the same style"
-        className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
       />
       <div className="flex items-center gap-2">
         <SubmitButton size="sm" pendingText="Spinning…">

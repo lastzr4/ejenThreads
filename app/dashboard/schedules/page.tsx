@@ -1,11 +1,16 @@
 import { createClient } from "@/lib/supabase/server";
 import { createSchedule, toggleSchedule, deleteSchedule, runScheduleNow } from "./actions";
 import { SubmitButton } from "@/components/submit-button";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { PendingBanner } from "@/components/pending-banner";
 import { LocalDateTime } from "@/components/local-datetime";
 import { NICHE_OPTIONS, nicheLabel } from "@/lib/niches";
 import { HOOK_TYPE_OPTIONS, hookTypeLabels } from "@/lib/hook-types";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 const INTERVAL_OPTIONS = [
@@ -69,84 +74,76 @@ export default async function SchedulesPage({
             <form action={createSchedule} className="space-y-3">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">Creator</label>
-                  <select
-                    name="creatorId"
-                    required
-                    className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
-                  >
+                  <Label htmlFor="creatorId" className="mb-1 block text-xs font-medium text-slate-600">
+                    Creator
+                  </Label>
+                  <Select id="creatorId" name="creatorId" required>
                     {studiedCreators.map((c) => (
                       <option key={c.id} value={c.id}>
                         @{c.username}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">Interval</label>
-                  <select
-                    name="intervalHours"
-                    defaultValue="4"
-                    className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
-                  >
+                  <Label htmlFor="intervalHours" className="mb-1 block text-xs font-medium text-slate-600">
+                    Interval
+                  </Label>
+                  <Select id="intervalHours" name="intervalHours" defaultValue="4">
                     {INTERVAL_OPTIONS.map((opt) => (
                       <option key={opt.hours} value={opt.hours}>
                         {opt.label}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">
+                <Label htmlFor="topic" className="mb-1 block text-xs font-medium text-slate-600">
                   Recurring topic (optional — e.g. a product name + affiliate link to keep tagging)
-                </label>
-                <input
+                </Label>
+                <Input
+                  id="topic"
                   type="text"
                   name="topic"
                   placeholder="Leave blank to let it pick fitting topics each time"
-                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
                 />
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">Niche (optional)</label>
-                  <select
-                    name="niche"
-                    defaultValue=""
-                    className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
-                  >
+                  <Label htmlFor="niche" className="mb-1 block text-xs font-medium text-slate-600">
+                    Niche (optional)
+                  </Label>
+                  <Select id="niche" name="niche" defaultValue="">
                     {NICHE_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>
                         {opt.label}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">Format</label>
-                  <select
-                    name="postType"
-                    defaultValue="single"
-                    className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
-                  >
+                  <Label htmlFor="postType" className="mb-1 block text-xs font-medium text-slate-600">
+                    Format
+                  </Label>
+                  <Select id="postType" name="postType" defaultValue="single">
                     <option value="single">Single post</option>
                     <option value="thread">Thread</option>
                     <option value="carousel">Carousel (multi-image)</option>
-                  </select>
+                  </Select>
                 </div>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">
+                <Label htmlFor="role" className="mb-1 block text-xs font-medium text-slate-600">
                   Role / arahan khusus (optional) — overrides the format/structure every run, e.g. &quot;This
                   account is a professional short-story (cerpen) writer, ending each story with an affiliate
                   product plug.&quot;
-                </label>
-                <textarea
+                </Label>
+                <Textarea
+                  id="role"
                   name="role"
                   rows={3}
                   placeholder="Leave blank to just use this creator's usual post format"
-                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
                 />
               </div>
               <div>
@@ -164,11 +161,12 @@ export default async function SchedulesPage({
                 </div>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">
+                <Label htmlFor="fixedImage" className="mb-1 block text-xs font-medium text-slate-600">
                   Upload a fixed image (optional, Single/Thread only) — reused for every run instead of AI
                   generation
-                </label>
+                </Label>
                 <input
+                  id="fixedImage"
                   type="file"
                   name="fixedImage"
                   accept="image/*"
@@ -178,10 +176,11 @@ export default async function SchedulesPage({
               <div className="rounded-md border border-slate-100 bg-slate-50 p-3 space-y-3">
                 <p className="text-xs font-medium text-slate-600">Carousel format only (ignored otherwise)</p>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">
+                  <Label htmlFor="scheduleCarouselImages" className="mb-1 block text-xs font-medium text-slate-600">
                     Upload fixed images (2-20) — reused for every run instead of AI generation
-                  </label>
+                  </Label>
                   <input
+                    id="scheduleCarouselImages"
                     type="file"
                     name="carouselImages"
                     accept="image/*"
@@ -190,20 +189,21 @@ export default async function SchedulesPage({
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">
+                  <Label htmlFor="scheduleCarouselImageCount" className="mb-1 block text-xs font-medium text-slate-600">
                     Number of AI images per run (if not uploading fixed images above)
-                  </label>
-                  <select
+                  </Label>
+                  <Select
+                    id="scheduleCarouselImageCount"
                     name="carouselImageCount"
                     defaultValue="3"
-                    className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400 sm:w-40"
+                    className="sm:w-40"
                   >
                     {[2, 3, 4, 5, 6, 8, 10].map((n) => (
                       <option key={n} value={n}>
                         {n} images
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               </div>
               <div className="space-y-2">
@@ -328,9 +328,14 @@ export default async function SchedulesPage({
                   </form>
                   <form action={deleteSchedule}>
                     <input type="hidden" name="id" value={schedule.id} />
-                    <Button variant="ghost" size="sm" type="submit">
+                    <ConfirmSubmitButton
+                      variant="destructive"
+                      size="sm"
+                      pendingText="Deleting…"
+                      confirmMessage="Delete this schedule? It will stop generating new posts automatically. This can't be undone."
+                    >
                       Delete
-                    </Button>
+                    </ConfirmSubmitButton>
                   </form>
                 </CardContent>
               </Card>

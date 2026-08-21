@@ -5,6 +5,8 @@ import { X } from "lucide-react";
 import { generateStandaloneImage } from "@/app/dashboard/image-generator/actions";
 import { SubmitButton } from "@/components/submit-button";
 import { PendingBanner } from "@/components/pending-banner";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { IMAGE_TEMPLATES } from "@/lib/image-templates";
 
 /**
@@ -68,24 +70,27 @@ export function ImageGeneratorForm() {
       </div>
 
       <div>
-        <label className="mb-1 block text-xs font-medium text-slate-600">Prompt</label>
-        <textarea
+        <Label htmlFor="imagePrompt" className="mb-1 block text-xs font-medium text-slate-600">
+          Prompt
+        </Label>
+        <Textarea
+          id="imagePrompt"
           name="prompt"
           rows={5}
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           placeholder="Klik satu templat di atas untuk mula, atau tulis prompt sendiri"
-          className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
         />
       </div>
 
       <div>
-        <label className="mb-1 block text-xs font-medium text-slate-600">
+        <Label htmlFor="referenceImages" className="mb-1 block text-xs font-medium text-slate-600">
           Gambar rujukan produk (optional, boleh lebih dari satu) — kalau ada, AI kekalkan rupa produk
           sebenar (bentuk/warna/label) dan bina scene sekitar dia based on prompt di atas, bukan reka produk
           dari kosong
-        </label>
+        </Label>
         <input
+          id="referenceImages"
           ref={inputRef}
           type="file"
           name="referenceImages"

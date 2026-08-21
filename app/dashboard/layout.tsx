@@ -43,6 +43,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div className="min-h-screen bg-slate-50">
+      <VersionWatcher initialVersion={APP_VERSION} />
       <header className="relative flex items-center justify-between border-b border-slate-200 bg-white px-4 py-4 sm:px-6">
         <div className="flex items-center gap-6">
           <span className="font-semibold">CopyCreator</span>
@@ -79,7 +80,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
         </div>
       </header>
       <main className="mx-auto max-w-5xl p-4 sm:p-6">{children}</main>
-      <VersionWatcher initialVersion={APP_VERSION} />
     </div>
   );
 }

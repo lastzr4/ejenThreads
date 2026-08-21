@@ -2,6 +2,10 @@ import { createClient } from "@/lib/supabase/server";
 import { generateTaburLinkPost } from "./actions";
 import { SubmitButton } from "@/components/submit-button";
 import { PendingBanner } from "@/components/pending-banner";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { NICHE_OPTIONS } from "@/lib/niches";
 import { HOOK_TYPE_OPTIONS } from "@/lib/hook-types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,55 +64,53 @@ export default async function TaburLinkPage({
             <form action={generateTaburLinkPost} className="space-y-3">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">Creator (style)</label>
-                  <select
-                    name="creatorId"
-                    required
-                    className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
-                  >
+                  <Label htmlFor="creatorId" className="mb-1 block text-xs font-medium text-slate-600">
+                    Creator (style)
+                  </Label>
+                  <Select id="creatorId" name="creatorId" required>
                     {studiedCreators.map((c) => (
                       <option key={c.id} value={c.id}>
                         @{c.username}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">Niche (optional)</label>
-                  <select
-                    name="niche"
-                    defaultValue="affiliate_product"
-                    className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
-                  >
+                  <Label htmlFor="niche" className="mb-1 block text-xs font-medium text-slate-600">
+                    Niche (optional)
+                  </Label>
+                  <Select id="niche" name="niche" defaultValue="affiliate_product">
                     {NICHE_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>
                         {opt.label}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Shopee affiliate link</label>
-                <input
+                <Label htmlFor="shopeeUrl" className="mb-1 block text-xs font-medium text-slate-600">
+                  Shopee affiliate link
+                </Label>
+                <Input
+                  id="shopeeUrl"
                   type="text"
                   name="shopeeUrl"
                   required
                   placeholder="https://s.shopee.com.my/..."
-                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
                 />
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">
+                <Label htmlFor="role" className="mb-1 block text-xs font-medium text-slate-600">
                   Role / arahan khusus (optional)
-                </label>
-                <textarea
+                </Label>
+                <Textarea
+                  id="role"
                   name="role"
                   rows={2}
                   placeholder="Leave blank to just use this creator's usual post format"
-                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
                 />
               </div>
 
@@ -127,11 +129,12 @@ export default async function TaburLinkPage({
               </div>
 
               <div className="rounded-md border border-slate-100 bg-slate-50 p-3 space-y-1">
-                <label className="mb-1 block text-xs font-medium text-slate-600">
+                <Label htmlFor="taburVideo" className="mb-1 block text-xs font-medium text-slate-600">
                   Video (a creative asset you downloaded from Shopee&apos;s Affiliate Center — MP4 or MOV,
                   under 100MB)
-                </label>
+                </Label>
                 <input
+                  id="taburVideo"
                   type="file"
                   name="video"
                   accept="video/mp4,video/quicktime"
@@ -146,12 +149,13 @@ export default async function TaburLinkPage({
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">
+                <Label htmlFor="taburUploadedImage" className="mb-1 block text-xs font-medium text-slate-600">
                   Upload your own photo (optional) — used as-is if &quot;Generate image with AI&quot; below
                   is OFF; if that&apos;s ON too, it becomes a reference photo instead (AI keeps the real
                   product accurate but builds a fresh, more engaging scene around it)
-                </label>
+                </Label>
                 <input
+                  id="taburUploadedImage"
                   type="file"
                   name="uploadedImage"
                   accept="image/*"

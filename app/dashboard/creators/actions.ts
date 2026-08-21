@@ -63,6 +63,22 @@ export async function deleteCreator(formData: FormData) {
   redirect("/dashboard/creators");
 }
 
+export async function toggleCreatorActive(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  const isActive = formData.get("isActive") === "true";
+  if (!id) return;
+
+  const supabase = createClient();
+  const { error } = await supabase.from("creators").update({ is_active: !isActive }).eq("id", id);
+
+  if (error) {
+    redirect(`/dashboard/creators?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/dashboard/creators");
+  redirect("/dashboard/creators");
+}
+
 export async function fetchPostsForCreator(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const username = String(formData.get("username") ?? "");
