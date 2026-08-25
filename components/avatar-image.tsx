@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { refreshThreadsAvatar } from "@/app/dashboard/settings/refresh-avatar-action";
 
 interface AvatarImageProps {
   src: string | null;
@@ -13,23 +14,42 @@ interface AvatarImageProps {
 /**
  * Threads/Instagram profile picture URLs (from Meta's CDN, e.g.
  * scontent-*.cdninstagram.com) are signed and time-limited — they carry an
- * `oe=` expiry param and typically stop working days to weeks after being
- * fetched during OAuth connect. Once that happens a plain <img> just shows
- * the browser's broken-image icon forever, since nothing tells it to fall
- * back. This swaps to a plain "?" circle instead as soon as the image
- * actually fails to load (a real fix — refetching a fresh URL from Meta
- * periodically — would need its own backend job; this at least keeps the
- * UI clean in the meantime).
+ * `oe=` expiry param and stop working days to weeks after being fetched
+ * during OAuth connect, long before the actual access token expires. When
+ * that happens, this tries once to fetch a fresh URL (via
+ * refreshThreadsAvatar, using the still-valid access token already on
+ * file — no reconnect needed) and swaps to it automatically. Only if that
+ * also fails does it fall back to the plain "?" placeholder.
  */
 export function AvatarImage({ src, alt, imgClassName, fallbackClassName, fallbackText }: AvatarImageProps) {
+  const [currentSrc, setCurrentSrc] = useState(src);
   const [failed, setFailed] = useState(false);
+  const triedRefresh = useRef(false);
 
-  if (!src || failed) {
+  const handleError = async () => {
+    if (triedRefresh.current) {
+      setFailed(true);
+      return;
+    }
+    triedRefresh.current = true;
+    try {
+      const fresh = await refreshThreadsAvatar();
+      if (fresh) {
+        setCurrentSrc(fresh);
+        return;
+      }
+    } catch {
+      // Falls through to the placeholder below.
+    }
+    setFailed(true);
+  };
+
+  if (!currentSrc || failed) {
     return <div className={fallbackClassName}>{fallbackText ?? "?"}</div>;
   }
 
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={src} alt={alt} className={imgClassName} onError={() => setFailed(true)} />
+    <img src={currentSrc} alt={alt} className={imgClassName} onError={handleError} />
   );
 }
