@@ -6,6 +6,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { LocalDateTime } from "@/components/local-datetime";
 import { Button } from "@/components/ui/button";
+import { AvatarImage } from "@/components/avatar-image";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -201,18 +202,12 @@ export default async function SettingsPage({
         <CardContent className="space-y-4">
           {apiConnected && (
             <div className="flex items-center gap-3 rounded-md border border-slate-200 bg-white p-3">
-              {apiProfilePictureUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={apiProfilePictureUrl}
-                  alt={apiUsername ?? "Connected account"}
-                  className="h-10 w-10 shrink-0 rounded-full object-cover"
-                />
-              ) : (
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-medium text-slate-400">
-                  ?
-                </div>
-              )}
+              <AvatarImage
+                src={apiProfilePictureUrl}
+                alt={apiUsername ?? "Connected account"}
+                imgClassName="h-10 w-10 shrink-0 rounded-full object-cover"
+                fallbackClassName="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-medium text-slate-400"
+              />
               <div className="min-w-0">
                 <p className="text-sm font-medium text-slate-900">
                   {apiUsername ? `@${apiUsername}` : "Unknown account"}

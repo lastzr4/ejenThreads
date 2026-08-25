@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { signOut } from "@/app/login/actions";
 import { Button } from "@/components/ui/button";
 import { DashboardNav } from "@/components/dashboard-nav";
+import { AvatarImage } from "@/components/avatar-image";
 import { VersionWatcher } from "@/components/version-watcher";
 import { APP_VERSION } from "@/lib/app-version";
 
@@ -57,14 +58,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
           >
             {threadsUsername ? (
               <>
-                {threadsAvatar ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={threadsAvatar} alt={threadsUsername} className="h-5 w-5 rounded-full object-cover" />
-                ) : (
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-200 text-[10px] text-slate-500">
-                    ?
-                  </span>
-                )}
+                <AvatarImage
+                  src={threadsAvatar}
+                  alt={threadsUsername}
+                  imgClassName="h-5 w-5 rounded-full object-cover"
+                  fallbackClassName="flex h-5 w-5 items-center justify-center rounded-full bg-slate-200 text-[10px] text-slate-500"
+                />
                 <span className="font-medium text-slate-700">@{threadsUsername}</span>
               </>
             ) : (

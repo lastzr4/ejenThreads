@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
+import { AvatarImage } from "@/components/avatar-image";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default async function DashboardPage() {
@@ -63,14 +64,12 @@ export default async function DashboardPage() {
         <CardContent>
           {apiUsername ? (
             <div className="flex items-center gap-3">
-              {apiAvatar ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={apiAvatar} alt={apiUsername} className="h-10 w-10 rounded-full object-cover" />
-              ) : (
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-sm font-medium text-slate-400">
-                  ?
-                </div>
-              )}
+              <AvatarImage
+                src={apiAvatar}
+                alt={apiUsername}
+                imgClassName="h-10 w-10 rounded-full object-cover"
+                fallbackClassName="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-sm font-medium text-slate-400"
+              />
               <div>
                 <p className="text-sm font-medium text-slate-900">@{apiUsername}</p>
                 <p className="text-xs text-slate-500">
